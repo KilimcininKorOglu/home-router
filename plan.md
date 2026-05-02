@@ -1722,11 +1722,11 @@ Adımlar:
    - Agent operations: `network.vlan.create`, `network.vlan.delete`, `network.vlan.up`, `network.vlan.down`
    - Startup restore: config'deki VLAN tanımlarını boot'ta oluştur
    - Web UI: VLAN listesi, ekleme formu (parent NIC dropdown, VID input, IP/subnet, isolated toggle), silme
-3. `text/template` ile `/etc/ppp/peers/wan` ve options dosyası render
-3. PPPoE service: Connect (`pppd call wan`), Disconnect (`kill pppd`), Status
-4. Credentials `.credentials.enc`'den AES-256-GCM ile çözme
-5. Auto-reconnect: pppd `persist` + `holdoff` seçenekleri
-6. **IPv6 over PPPoE:**
+3. ✅ `text/template` ile `/etc/ppp/peers/wan` ve options dosyası render
+3. ✅ PPPoE service: Connect (`pppd call wan`), Disconnect (`kill pppd`), Status
+4. ✅ Credentials `.credentials.enc`'den AES-256-GCM ile çözme
+5. ✅ Auto-reconnect: pppd `persist` + `holdoff` seçenekleri
+6. ✅ **IPv6 over PPPoE:**
    - pppd `+ipv6` seçeneği → IPv6CP negotiation etkinleştir
    - ISP IPv6 destekliyorsa ppp0 interface'de link-local IPv6 adresi oluşur
    - DHCPv6-PD client: `dhcpcd` veya `wide-dhcpv6-client` ile prefix delegation talep et

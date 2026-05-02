@@ -1,0 +1,17 @@
+plugin pppoe.so
+{{.WANDevice}}
+user "{{.Username}}"
+mtu {{.MTU}}
+mru {{.MRU}}
+defaultroute
+usepeerdns
+persist
+holdoff {{.Holdoff}}
+maxfail 0
+lcp-echo-interval {{.LCPEchoInterval}}
+lcp-echo-failure {{.LCPEchoFailure}}
+noauth
+hide-password
+{{- if .IPv6CP}}
++ipv6
+{{- end}}
