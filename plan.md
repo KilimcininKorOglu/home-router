@@ -1585,7 +1585,7 @@ Adımlar:
     - Unbound/dnsmasq/chrony başlangıç config'leri render
     - `systemctl start home-router.target`
     - Kurulum sonrası bilgi: Web UI adresi, SSH notları
-14. Unit test: agent IPC round-trip + i18n T() fonksiyonu + eksik anahtar fallback
+14. ✅ Unit test: agent IPC round-trip + i18n T() fonksiyonu + eksik anahtar fallback
 
 Manuel doğrulama:
 - `go build ./...` hatasız derleniyor mu

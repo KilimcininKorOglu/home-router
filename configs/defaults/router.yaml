@@ -1,0 +1,241 @@
+system:
+  hostname: "home-router"
+  timezone: "Europe/Istanbul"
+  language: "tr"
+  adminPasswordHash: ""
+  sessionSecret: ""
+  webPort: 8443
+  webBind: "10.10.10.1"
+  tls:
+    mode: "self-signed"
+    certFile: ""
+    keyFile: ""
+    selfSigned:
+      cn: "home-router.lan"
+      validDays: 3650
+      sans:
+        - "home-router.lan"
+        - "10.10.10.1"
+        - "router.local"
+    acme:
+      enabled: false
+      email: ""
+      domain: ""
+      provider: "letsencrypt"
+      dnsChallenge:
+        provider: ""
+        apiToken: ""
+    mkcert:
+      caInstalled: false
+
+interfaces:
+  - id: "wan"
+    device: "enp3s0"
+    label: "WAN"
+    role: "wan"
+    type: "pppoe"
+    mtu: 1492
+    mac: ""
+    ipv6: "auto"
+  - id: "lan"
+    device: "enp0s25"
+    label: "LAN"
+    role: "lan"
+    type: "static"
+    address: "10.10.10.1/24"
+    address6: ""
+    mtu: 1500
+    mac: ""
+
+vlans: []
+
+healthCheck:
+  enabled: true
+  checks:
+    - name: "wan-internet"
+      interface: "wan"
+      targets:
+        - type: "ping"
+          host: "8.8.8.8"
+        - type: "ping"
+          host: "1.1.1.1"
+      interval: "30s"
+      timeout: "5s"
+      failureThreshold: 3
+      failureWindow: "5m"
+      actions:
+        - type: "restartInterface"
+          delay: "0s"
+        - type: "restartPppoe"
+          delay: "30s"
+      cooldown: "5m"
+      notify: true
+
+pppoe:
+  username: ""
+  password: ""
+  mtu: 1492
+  mru: 1492
+  lcpEchoInterval: 10
+  lcpEchoFailure: 3
+  persist: true
+  holdoff: 5
+  ipv6cp: true
+
+usbTethering:
+  enabled: false
+  autoFailover: true
+  autoFailback: true
+  failoverDelay: "10s"
+  failbackDelay: "30s"
+  interface: "usb0"
+  metric: 100
+  nat: true
+  ttlFix: true
+
+firewall:
+  defaultPolicy: "drop"
+  ttlFix:
+    enabled: false
+    value: 64
+  portForwards: []
+  rateLimits:
+    ssh: "3/minute"
+    web: "30/minute"
+
+qos:
+  enabled: false
+  profile: "cake"
+  uploadKbps: 40000
+  downloadKbps: 950000
+  congestionControl: "bbr"
+  perDeviceLimits: {}
+
+dns:
+  upstream: []
+  dotUpstream: ""
+  enableDoT: false
+  blocklistUrls:
+    - "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+  blocklistUpdateSchedule: "0 3 * * *"
+  cacheSize: 50000
+  queryLog:
+    enabled: true
+    logPath: "/var/log/unbound/queries.log"
+    maxSize: "100M"
+    retention: "7d"
+    logBlocked: true
+
+dhcp:
+  rangeStart: "10.10.10.100"
+  rangeEnd: "10.10.10.250"
+  leaseTime: "12h"
+  gateway: "10.10.10.1"
+  dnsServer: "10.10.10.1"
+  staticLeases: []
+
+ipv6:
+  enabled: "auto"
+  mode: "dhcpv6-pd"
+  wan:
+    acceptRA: true
+    requestPrefix: true
+    prefixHint: "/56"
+  lan:
+    mode: "slaac"
+    ula:
+      enabled: true
+      prefix: "fd00:abcd:1234::/48"
+    raInterval: 30
+    rdnss: true
+  privacy: true
+
+vpn:
+  clients: []
+  server:
+    enabled: false
+    listenPort: 51820
+    privateKey: ""
+    publicKey: ""
+    address: "10.10.11.1/24"
+    address6: "fd10:10::1/64"
+    dns: "10.10.10.1"
+    postUp: ""
+    postDown: ""
+    mtu: 1420
+    peers: []
+  deviceAssignments: {}
+
+openvpn:
+  clients: []
+  server:
+    enabled: false
+    protocol: "udp"
+    port: 1194
+    device: "tun"
+    subnet: "10.10.12.0/24"
+    subnet6: "fd20:20::/64"
+    dns: "10.10.10.1"
+    cipher: "AES-256-GCM"
+    auth: "SHA256"
+    tlsAuth: true
+    compression: false
+    maxClients: 10
+    keepalive: "10 120"
+    clientToClient: false
+    duplicateCn: false
+    clients: []
+    ccd: {}
+
+routing:
+  policies: []
+
+nas:
+  shares: []
+  m3uSources: []
+
+syslog:
+  server:
+    enabled: false
+    listenUDP: ":514"
+    listenTCP: ""
+    enableTLS: false
+    logPath: "/var/log/remote"
+    perHostDirs: true
+    maxRetention: "30d"
+  client:
+    enabled: false
+    remoteHost: ""
+    protocol: "udp"
+    enableTLS: false
+    facilities:
+      - "kern.*"
+      - "auth.*"
+      - "daemon.*"
+
+ntp:
+  server:
+    enabled: true
+    listenAddress: "10.10.10.1"
+    listenPort: 123
+  client:
+    enabled: true
+    sources:
+      - "0.tr.pool.ntp.org"
+      - "1.tr.pool.ntp.org"
+      - "2.pool.ntp.org"
+      - "3.pool.ntp.org"
+    fallback: "time.google.com"
+  rtcSync: true
+  allowSubnets:
+    - "10.10.10.0/24"
+    - "10.10.11.0/24"
+
+storage:
+  raid:
+    device: "/dev/md0"
+    level: 1
+    members:
+      - "/dev/sda1"
+      - "/dev/sdb1"
+  smartCheckInterval: 3600
