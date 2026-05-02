@@ -1983,18 +1983,18 @@ Adımlar:
    - `/proc/net/dev` (interface byte counters → throughput hesaplama)
 2. ✅ SSE broker: channel-based pub/sub, goroutine per client
 3. ✅ SSE endpoint: `GET /events/stats` → `text/event-stream`
-4. **Dashboard stat kartları (X design system):**
+4. ✅ **Dashboard stat kartları (X design system):**
    - `.card` bileşeni: `--bg-surface` zemin, `--border-color` kenar, 16px radius
    - Her kart: ikon + etiket (`--text-secondary`) + değer (`--text-primary`, 23px, bold)
    - Durum renkleri: bağlı → `--accent-green`, kopuk → `--accent-red`, uyarı → `--accent-yellow`
    - Kartlar CSS Grid: `grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))`
-5. Canvas grafik: bandwidth history (son 60 veri noktası, 1s interval), `--accent-blue` çizgi rengi
-6. **Responsive layout:**
+5. ✅ Canvas grafik: bandwidth history (son 60 veri noktası, 1s interval), `--accent-blue` çizgi rengi
+6. ✅ **Responsive layout:**
    - Desktop: 3-sütun grid (sidebar 275px + content + panel 350px)
    - Tablet (< 1024px): sidebar daraltılır (ikon-only, 68px)
    - Mobil (< 768px): sidebar → bottom tab bar, panel gizlenir, tek sütun
-7. Settings sayfası: hostname, timezone, password değiştir, tema toggle (dark/light)
-8. **i18n:** Dashboard stat etiketleri, birim formatları `{{ t .Lang "dashboard.*" }}` ile
+7. ✅ Settings sayfası: hostname, timezone, password değiştir, tema toggle (dark/light)
+8. ✅ **i18n:** Dashboard stat etiketleri, birim formatları `{{ t .Lang "dashboard.*" }}` ile
 
 Manuel doğrulama:
 - Dashboard'da real-time metrikler güncelleniyor mu (SSE)

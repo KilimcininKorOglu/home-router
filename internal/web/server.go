@@ -27,8 +27,12 @@ type Server struct {
 	http     *http.Server
 	network  *handlers.NetworkHandler
 	firewall *handlers.FirewallHandler
-	dns      *handlers.DNSHandler
-	dhcp     *handlers.DHCPHandler
+	dns       *handlers.DNSHandler
+	dhcp      *handlers.DHCPHandler
+	dashboard *handlers.DashboardHandler
+	settings  *handlers.SystemHandler
+	sse       *SSEBroker
+	monitor   *services.MonitorService
 }
 
 func NewServer(cfg *config.Config, loc *i18n.I18n, agentClient *agent.Client, webFS fs.FS) (*Server, error) {
@@ -62,16 +66,25 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, agentClient *agent.Client, we
 	dhcpSvc := services.NewDHCPService(cfg)
 	dhcpHandler := handlers.NewDHCPHandler(renderer, dhcpSvc)
 
+	monitorSvc := services.NewMonitorService()
+	dashboardHandler := handlers.NewDashboardHandler(renderer, monitorSvc, pppoeSvc, dhcpSvc)
+	settingsHandler := handlers.NewSystemHandler(renderer, cfg)
+	sseBroker := NewSSEBroker()
+
 	s := &Server{
-		cfg:      cfg,
-		auth:     auth,
-		renderer: renderer,
-		loc:      loc,
-		network:  networkHandler,
-		firewall: firewallHandler,
-		dns:      dnsHandler,
-		dhcp:     dhcpHandler,
-		agent:    agentClient,
+		cfg:       cfg,
+		auth:      auth,
+		renderer:  renderer,
+		loc:       loc,
+		network:   networkHandler,
+		firewall:  firewallHandler,
+		dns:       dnsHandler,
+		dhcp:      dhcpHandler,
+		dashboard: dashboardHandler,
+		settings:  settingsHandler,
+		sse:       sseBroker,
+		monitor:   monitorSvc,
+		agent:     agentClient,
 	}
 
 	mux := http.NewServeMux()
@@ -114,8 +127,18 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, agentClient *agent.Client, we
 }
 
 func (s *Server) Serve(ctx context.Context) error {
+	var ifaceNames []string
+	for _, iface := range s.cfg.Interfaces {
+		ifaceNames = append(ifaceNames, iface.Device)
+	}
+
+	stopMonitor := make(chan struct{})
+	go s.monitor.Start(stopMonitor, ifaceNames)
+	go s.publishStats(ctx)
+
 	go func() {
 		<-ctx.Done()
+		close(stopMonitor)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		s.http.Shutdown(shutdownCtx)
@@ -149,7 +172,10 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 	mux.HandleFunc("POST /settings/lang", s.handleLangSwitch)
 
 	authed := AuthRequired(s.auth)
-	mux.Handle("GET /{$}", authed(http.HandlerFunc(s.handleDashboard)))
+	mux.Handle("GET /{$}", authed(http.HandlerFunc(s.dashboard.HandlePage)))
+	mux.Handle("GET /events/stats", authed(http.HandlerFunc(s.sse.ServeHTTP)))
+	mux.Handle("GET /settings", authed(http.HandlerFunc(s.settings.HandleSettingsPage)))
+	mux.Handle("POST /settings/password", authed(http.HandlerFunc(s.settings.HandleChangePassword)))
 	mux.Handle("GET /network", authed(http.HandlerFunc(s.network.HandlePage)))
 	mux.Handle("GET /firewall", authed(http.HandlerFunc(s.firewall.HandlePage)))
 	mux.Handle("POST /firewall/apply", authed(http.HandlerFunc(s.firewall.HandleApply)))
@@ -249,15 +275,19 @@ func (s *Server) handleLangSwitch(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, r.Referer(), http.StatusSeeOther)
 }
 
-func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	lang := i18n.LangFromContext(r.Context())
-	data := &tmpl.PageData{
-		Lang:      lang,
-		Page:      "dashboard",
-		CSRFToken: getOrCreateCSRFToken(w, r),
-	}
-	if err := s.renderer.Render(w, "dashboard", "base", data); err != nil {
-		log.Printf("render dashboard: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+func (s *Server) publishStats(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if s.sse.ClientCount() > 0 {
+				stats := s.monitor.GetCurrent()
+				s.sse.Publish("stats", stats)
+			}
+		}
 	}
 }

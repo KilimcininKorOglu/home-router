@@ -1,0 +1,66 @@
+{{ define "content" }}
+<link rel="stylesheet" href="/static/css/pages.css">
+<div class="content-header">
+    <h1>{{ t .Lang "settings.title" }}</h1>
+</div>
+<div class="content-body">
+    {{ with .Data }}
+
+    {{ if $.Error }}
+    <div class="alert alert-error">{{ $.Error }}</div>
+    {{ end }}
+
+    <div class="card settings-section">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "settings.title" }}</span>
+        </div>
+        <div class="settings-row">
+            <span class="settings-label">{{ t $.Lang "settings.hostname" }}</span>
+            <span class="settings-value">{{ .Hostname }}</span>
+        </div>
+        <div class="settings-row">
+            <span class="settings-label">{{ t $.Lang "settings.timezone" }}</span>
+            <span class="settings-value">{{ .Timezone }}</span>
+        </div>
+        <div class="settings-row">
+            <span class="settings-label">{{ t $.Lang "tls.mode" }}</span>
+            <span class="settings-value">{{ .TLSMode }}</span>
+        </div>
+    </div>
+
+    <div class="card settings-section">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "settings.changePassword" }}</span>
+        </div>
+        <form hx-post="/settings/password" hx-swap="none" style="padding-top:var(--space-md);">
+            <div class="input-group" style="margin-bottom:var(--space-md);">
+                <label class="input-label">{{ t $.Lang "settings.newPassword" }}</label>
+                <input type="password" class="input" name="newPassword" minlength="8" required>
+            </div>
+            <div class="input-group" style="margin-bottom:var(--space-md);">
+                <label class="input-label">{{ t $.Lang "settings.confirmPassword" }}</label>
+                <input type="password" class="input" name="confirmPassword" minlength="8" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">{{ t $.Lang "common.save" }}</button>
+        </form>
+    </div>
+
+    <div class="card settings-section">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "settings.backup" }}</span>
+        </div>
+        <div style="display:flex; gap:var(--space-sm); padding-top:var(--space-md);">
+            <button class="btn btn-secondary btn-sm">{{ t $.Lang "settings.export" }}</button>
+            <button class="btn btn-secondary btn-sm">{{ t $.Lang "settings.import" }}</button>
+        </div>
+    </div>
+
+    <div style="display:flex; gap:var(--space-sm); margin-top:var(--space-2xl);">
+        <button class="btn btn-danger btn-sm" hx-post="/system/reboot" hx-confirm="{{ t $.Lang "settings.confirmReboot" }}">
+            {{ t $.Lang "settings.reboot" }}
+        </button>
+    </div>
+
+    {{ end }}
+</div>
+{{ end }}

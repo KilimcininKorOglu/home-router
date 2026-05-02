@@ -1,43 +1,94 @@
 {{ define "content" }}
+<link rel="stylesheet" href="/static/css/pages.css">
 <div class="content-header">
     <h1>{{ t .Lang "dashboard.title" }}</h1>
 </div>
 <div class="content-body">
-    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-lg);">
-        <div class="card">
-            <div class="card-title">{{ t .Lang "dashboard.uptime" }}</div>
-            <div style="font-size: var(--font-2xl); font-weight: 700; margin-top: var(--space-sm);">
-                <span class="skeleton" style="display:inline-block; width:120px; height:32px;"></span>
+    {{ with .Data }}
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">{{ t $.Lang "dashboard.uptime" }}</div>
+            <div class="stat-value" id="stat-uptime">{{ if .Stats.Uptime }}{{ humanTime .Stats.Uptime }}{{ else }}—{{ end }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">{{ t $.Lang "dashboard.wanIp" }}</div>
+            <div class="stat-value" id="stat-wan-ip" style="font-size:var(--font-lg);">
+                {{ if .PPPoE }}{{ if .PPPoE.LocalIP }}{{ .PPPoE.LocalIP }}{{ else }}—{{ end }}{{ else }}—{{ end }}
             </div>
         </div>
-        <div class="card">
-            <div class="card-title">{{ t .Lang "dashboard.wanIp" }}</div>
-            <div style="font-size: var(--font-2xl); font-weight: 700; margin-top: var(--space-sm);">
-                <span class="skeleton" style="display:inline-block; width:150px; height:32px;"></span>
-            </div>
+        <div class="stat-card">
+            <div class="stat-label">{{ t $.Lang "dashboard.activeDevices" }}</div>
+            <div class="stat-value" id="stat-devices">{{ .DeviceCount }}</div>
         </div>
-        <div class="card">
-            <div class="card-title">{{ t .Lang "dashboard.activeDevices" }}</div>
-            <div style="font-size: var(--font-2xl); font-weight: 700; margin-top: var(--space-sm);">
-                <span class="skeleton" style="display:inline-block; width:60px; height:32px;"></span>
-            </div>
+        <div class="stat-card">
+            <div class="stat-label">{{ t $.Lang "dashboard.cpuUsage" }}</div>
+            <div class="stat-value" id="stat-cpu">{{ printf "%.0f" .Stats.CPUPercent }}<span class="stat-unit">%</span></div>
         </div>
-        <div class="card">
-            <div class="card-title">{{ t .Lang "dashboard.cpuUsage" }}</div>
-            <div style="font-size: var(--font-2xl); font-weight: 700; margin-top: var(--space-sm);">
-                <span class="skeleton" style="display:inline-block; width:80px; height:32px;"></span>
-            </div>
+        <div class="stat-card">
+            <div class="stat-label">{{ t $.Lang "dashboard.ramUsage" }}</div>
+            <div class="stat-value" id="stat-ram">{{ printf "%.0f" .Stats.RAMPercent }}<span class="stat-unit">%</span></div>
         </div>
     </div>
+
+    <!-- Bandwidth Chart -->
+    <div class="bandwidth-chart">
+        <canvas id="bandwidth-canvas"></canvas>
+    </div>
+    <div class="bandwidth-legend">
+        <span><span class="legend-dot" style="background:var(--accent-blue);"></span>{{ t $.Lang "dashboard.download" }}</span>
+        <span><span class="legend-dot" style="background:var(--accent-green);"></span>{{ t $.Lang "dashboard.upload" }}</span>
+    </div>
+
+    {{ end }}
 </div>
+
+<script src="/static/js/chart.js"></script>
+<script>
+(function() {
+    var chart = window.BandwidthChart('bandwidth-canvas', 60);
+    if (!chart) return;
+
+    var evtSource = new EventSource('/events/stats');
+    evtSource.addEventListener('stats', function(e) {
+        try {
+            var data = JSON.parse(e.data);
+            if (data.CPUPercent !== undefined) {
+                var cpu = document.getElementById('stat-cpu');
+                if (cpu) cpu.innerHTML = Math.round(data.CPUPercent) + '<span class="stat-unit">%</span>';
+            }
+            if (data.RAMPercent !== undefined) {
+                var ram = document.getElementById('stat-ram');
+                if (ram) ram.innerHTML = Math.round(data.RAMPercent) + '<span class="stat-unit">%</span>';
+            }
+            if (data.Interfaces) {
+                var totalRx = 0, totalTx = 0;
+                for (var k in data.Interfaces) {
+                    totalRx += data.Interfaces[k].RxBytesPerSec || 0;
+                    totalTx += data.Interfaces[k].TxBytesPerSec || 0;
+                }
+                chart.addPoint(totalRx, totalTx);
+            }
+        } catch(err) {}
+    });
+})();
+</script>
 {{ end }}
 
 {{ define "panel" }}
-<h3 style="font-size: var(--font-lg); font-weight: 700; margin-bottom: var(--space-lg);">{{ t .Lang "common.status" }}</h3>
-<div class="card" style="margin-bottom: var(--space-lg);">
+<h3 style="font-size:var(--font-lg); font-weight:700; margin-bottom:var(--space-lg);">{{ t .Lang "common.status" }}</h3>
+{{ with .Data }}
+{{ if .PPPoE }}
+<div class="card" style="margin-bottom:var(--space-lg);">
     <div class="card-title">PPPoE</div>
-    <div style="margin-top: var(--space-sm);">
-        <span class="badge badge-success">{{ t .Lang "pppoe.status.connected" }}</span>
+    <div style="margin-top:var(--space-sm);">
+        {{ if .PPPoE.Connected }}
+            <span class="badge badge-success">{{ t $.Lang "pppoe.status.connected" }}</span>
+        {{ else }}
+            <span class="badge badge-error">{{ t $.Lang "pppoe.status.disconnected" }}</span>
+        {{ end }}
     </div>
 </div>
+{{ end }}
+{{ end }}
 {{ end }}
