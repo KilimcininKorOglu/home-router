@@ -116,6 +116,25 @@ if [[ ! -f "$CONFIG_DIR/router.yaml" ]]; then
     fi
 fi
 
+# Set admin password from installer
+if [[ -f /tmp/admin-password.txt ]]; then
+    ADMIN_PASS=$(cat /tmp/admin-password.txt)
+    ADMIN_HASH=$("$INSTALL_DIR/$BINARY_NAME" hash-password "$ADMIN_PASS" 2>/dev/null || \
+        python3 -c "import bcrypt; print(bcrypt.hashpw(b'$ADMIN_PASS', bcrypt.gensalt()).decode())" 2>/dev/null || \
+        echo "")
+    if [[ -n "$ADMIN_HASH" && -f "$CONFIG_DIR/router.yaml" ]]; then
+        sed -i "s|adminPasswordHash:.*|adminPasswordHash: \"$ADMIN_HASH\"|" "$CONFIG_DIR/router.yaml"
+        echo "Admin password set."
+    fi
+    rm -f /tmp/admin-password.txt
+fi
+
+# Set hostname from installer
+HOSTNAME=$(hostname)
+if [[ -n "$HOSTNAME" && -f "$CONFIG_DIR/router.yaml" ]]; then
+    sed -i "s|hostname:.*|hostname: \"$HOSTNAME\"|" "$CONFIG_DIR/router.yaml"
+fi
+
 # First boot flag
 touch "$DATA_DIR/.first-boot"
 
