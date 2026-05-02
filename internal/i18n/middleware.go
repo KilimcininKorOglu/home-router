@@ -1,0 +1,45 @@
+package i18n
+
+import (
+	"context"
+	"net/http"
+	"strings"
+)
+
+type ctxKey struct{}
+
+func LangFromContext(ctx context.Context) string {
+	if lang, ok := ctx.Value(ctxKey{}).(string); ok {
+		return lang
+	}
+	return "tr"
+}
+
+func Middleware(i *I18n) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			lang := detectLang(r, i)
+			ctx := context.WithValue(r.Context(), ctxKey{}, lang)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func detectLang(r *http.Request, i *I18n) string {
+	if c, err := r.Cookie("lang"); err == nil && i.HasLocale(c.Value) {
+		return c.Value
+	}
+
+	accept := r.Header.Get("Accept-Language")
+	if accept != "" {
+		for _, part := range strings.Split(accept, ",") {
+			tag := strings.TrimSpace(strings.SplitN(part, ";", 2)[0])
+			code := strings.SplitN(tag, "-", 2)[0]
+			if i.HasLocale(code) {
+				return code
+			}
+		}
+	}
+
+	return i.fallback
+}
