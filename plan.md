@@ -822,6 +822,29 @@ var EmbeddedFS embed.FS
 
 Tüm HTML template'leri, CSS, JS, ikonlar ve locale JSON dosyaları binary'nin içine gömülür. Deploy = tek dosya kopyala.
 
+### Tam Offline Web UI — Harici Bağımlılık Yok
+
+Web UI internet bağlantısı olmadan %100 çalışır. Hiçbir harici kaynak (CDN, Google Fonts, external script/style) yüklenmez.
+
+**Gömülü tüm varlıklar:**
+- `htmx.min.js` — HTMX kütüphanesi (~14KB gzip), CDN'den değil binary'den servis
+- `htmx-sortable.js` — Drag-and-drop extension (PBR politika sıralama)
+- `variables.css`, `layout.css`, `components.css`, `pages.css` — tüm stil dosyaları
+- `app.js`, `chart.js` — minimal vanilla JS helper'ları
+- SVG ikonlar — `web/static/icons/` altında, harici ikon fontu yok (Font Awesome, Material Icons vb. yok)
+- Fontlar: sistem font stack (`-apple-system`, `Segoe UI`, vb.) — harici font indirme yok
+
+**Neden offline:**
+- Router, internet bağlantısını yöneten cihaz — WAN koptuğunda bile yönetim arayüzü erişilebilir olmalı
+- CDN bağımlılığı = single point of failure, gizlilik riski, yavaş LAN yükleme
+- `go:embed` ile tüm varlıklar binary içinde — ek dosya/dizin gerekmez
+
+**Content-Security-Policy header:**
+```
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'
+```
+Harici kaynak yüklenmesini CSP header ile de zorla engelle — XSS ile bile dışarıdan script yüklenemez.
+
 ---
 
 ## Config Schema (router.yaml)
