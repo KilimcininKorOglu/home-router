@@ -373,6 +373,7 @@ type Config struct {
     Routing    RoutingConfig    `yaml:"routing"`
     NAS        NASConfig        `yaml:"nas"`
     Syslog     SyslogConfig     `yaml:"syslog"`
+    NTP        NTPConfig        `yaml:"ntp"`
     Storage    StorageConfig    `yaml:"storage"`
 }
 ```
@@ -420,6 +421,7 @@ home-router/
 │   │       ├── storage.go        # RAID durumu, disk sağlığı
 │   │       ├── healthcheck.go     # Health check durum/config handler'ları
 │   │       ├── syslog.go          # Syslog sunucu/client yapılandırma
+│   │       ├── ntp.go            # NTP sunucu/client yapılandırma + durum
 │   │       └── system.go         # Ayarlar, yedekleme, reboot
 │   ├── services/
 │   │   ├── pppoe.go              # pppd yönetimi
@@ -434,6 +436,7 @@ home-router/
 │   │   ├── monitor.go            # Sistem istatistikleri toplayıcı (goroutine)
 │   │   ├── healthcheck.go       # Interface internet checker + otomatik recovery
 │   │   ├── syslog.go             # rsyslog config yönetimi (sunucu + client)
+│   │   ├── ntp.go                # chrony config yönetimi (sunucu + client)
 │   │   └── backup.go             # Config export/import
 │   ├── i18n/
 │   │   ├── i18n.go               # Locale yükleme, T() ve WithParams() fonksiyonları
@@ -463,6 +466,7 @@ home-router/
 │   │   │   ├── nas.html
 │   │   │   ├── storage.html
 │   │   │   ├── syslog.html
+│   │   │   ├── ntp.html
 │   │   │   ├── settings.html
 │   │   │   └── login.html
 │   │   └── partials/
@@ -482,6 +486,7 @@ home-router/
 │   │       ├── share_list.html   # Samba paylaşım listesi
 │   │       ├── raid_status.html  # RAID durumu
 │   │       ├── healthcheck.html  # Health check durum kartları + config formu
+│   │       ├── ntp_status.html   # NTP senkronizasyon durumu + kaynak listesi
 │   │       ├── toast.html        # Toast notification
 │   │       └── confirm.html      # Onay dialog
 │   ├── static/
@@ -510,6 +515,7 @@ home-router/
 │   │   ├── unbound.conf.tmpl     # Unbound recursive DNS config
 │   │   ├── dnsmasq.conf.tmpl    # dnsmasq DHCP-only config
 │   │   ├── rsyslog.conf.tmpl    # rsyslog sunucu/client config
+│   │   ├── chrony.conf.tmpl     # chrony NTP sunucu/client config
 │   │   ├── wireguard.conf.tmpl  # WireGuard interface config
 │   │   └── smb.conf.tmpl         # Samba paylaşım config
 │   └── defaults/
@@ -721,6 +727,24 @@ syslog:
       - "auth.*"
       - "daemon.*"
 
+ntp:
+  server:
+    enabled: true                        # LAN cihazlarına NTP sunuculuğu
+    listenAddress: "10.0.0.1"            # Sadece LAN interface
+    listenPort: 123
+  client:
+    enabled: true                        # Router'ın kendi zaman senkronizasyonu
+    sources:                             # Upstream NTP sunucuları (sıralı)
+      - "0.tr.pool.ntp.org"
+      - "1.tr.pool.ntp.org"
+      - "2.pool.ntp.org"
+      - "3.pool.ntp.org"
+    fallback: "time.google.com"          # Pool'lar ulaşılamaz ise
+  rtcSync: true                          # Sistem saatini RTC'ye yaz (hwclock)
+  allowSubnets:                          # NTP sunucuya erişim izni
+    - "10.0.0.0/24"                      # LAN
+    - "10.10.0.0/24"                     # VPN server peer'ları
+
 storage:
   raid:
     device: "/dev/md0"
@@ -871,6 +895,15 @@ Go'da HTMX ile iki tür endpoint var: **sayfa** (tam HTML) ve **partial** (HTML 
 | PUT    | /syslog/client             | Partial | Client ayarları (remote host, protocol) |
 | GET    | /partials/syslog-sources   | Partial | Log gönderen cihaz listesi         |
 
+### NTP
+| Method | Path                    | Tür     | Açıklama                               |
+|--------|-------------------------|---------|-----------------------------------------|
+| GET    | /ntp                    | Sayfa   | NTP yapılandırma + senkronizasyon durumu|
+| GET    | /partials/ntp-status    | Partial | chrony sources + tracking durumu        |
+| PUT    | /ntp/server             | Partial | NTP sunucu ayarları (enable/disable)    |
+| PUT    | /ntp/client             | Partial | NTP client ayarları (upstream sunucular)|
+| POST   | /ntp/force-sync         | Partial | Manuel zaman senkronizasyonu başlat     |
+
 ### System
 | Method | Path                    | Tür     | Açıklama                          |
 |--------|-------------------------|---------|------------------------------------|
@@ -920,11 +953,13 @@ apt install -y \
     unbound \
     dnsmasq \
     rsyslog \
+    chrony \
     qrencode                    # WireGuard peer QR kodu üretimi
 
 # dnsmasq: DNS kapalı (port=0), sadece DHCP
 # unbound: recursive DNS resolver + blocklist
 # rsyslog: syslog sunucu (ağdan log alma) + client (log forwarding)
+# chrony: NTP sunucu (LAN cihazlarına zaman servisi) + client (upstream senkronizasyon)
 # Go sadece build makinede gerekli, hedef makinede gerekli DEĞİL
 ```
 
@@ -1514,30 +1549,35 @@ Manuel doğrulama:
 - Kodi'den medya oynatılabiliyor mu
 - TR/EN dillerinde NAS sayfası metinleri doğru mu
 
-### Phase 10: Storage + Syslog + Backup + Hardening (4 gün)
-**Hedef:** RAID izleme, disk sağlığı, syslog sunucu/client, config backup, güvenlik sertleştirme.
+### Phase 10: Storage + Syslog + NTP + Backup + Hardening (5 gün)
+**Hedef:** RAID izleme, disk sağlığı, syslog sunucu/client, NTP sunucu/client, config backup, güvenlik sertleştirme.
 
 Oluşturulacak dosyalar:
 - `internal/services/storage.go`
 - `internal/services/backup.go`
 - `internal/services/syslog.go` — rsyslog config render + reload
+- `internal/services/ntp.go` — chrony config render + reload + durum okuma
 - `configs/sysconf/rsyslog.conf.tmpl` — rsyslog sunucu/client config şablonu
+- `configs/sysconf/chrony.conf.tmpl` — chrony NTP sunucu/client config şablonu
 - `internal/web/handlers/storage.go`
 - `internal/web/handlers/system.go`
 - `internal/web/handlers/syslog.go`
+- `internal/web/handlers/ntp.go`
 - `web/templates/pages/storage.html`
 - `web/templates/pages/syslog.html`
+- `web/templates/pages/ntp.html`
 - `web/templates/pages/settings.html`
 - `web/templates/partials/raid_status.html`
 - `web/templates/partials/syslog-logs.html`
 - `web/templates/partials/syslog-sources.html`
+- `web/templates/partials/ntp_status.html`
 - `deploy/factory-reset.sh`
 - `deploy/backup.sh`
 
 Adımlar:
 1. RAID: `mdadm --detail` parse, degraded alarm
 2. SMART: `smartctl -a` → sağlık skoru, sıcaklık, hata
-3. Config backup: `tar.gz` export/import (config/ + unbound + dnsmasq config)
+3. Config backup: `tar.gz` export/import (config/ + unbound + dnsmasq + chrony config)
 4. Factory reset: varsayılan config restore
 5. Güvenlik sertleştirme:
    - systemd: ProtectSystem=strict, PrivateTmp, NoNewPrivileges
@@ -1555,9 +1595,23 @@ Adımlar:
    - rsyslog forward kuralı: `*.* @@remote:514` (TCP) veya `*.* @remote:514` (UDP)
    - Facility seçimi: config'den hangi logların iletileceğini belirle
    - Opsiyonel TLS forwarding
-9. Agent ops: `syslog.reload` (systemctl reload rsyslog)
-10. **i18n:** Storage, syslog, settings, backup sayfaları `{{ t .Lang "storage.*" }}`, `{{ t .Lang "syslog.*" }}`, `{{ t .Lang "settings.*" }}` ile
-11. **i18n doğrulama:** Tüm locale JSON dosyalarında eksik anahtar testi (build time check)
+9. **NTP sunucu (chrony):**
+   - chrony config template render:
+     - Client modu: `server 0.tr.pool.ntp.org iburst` (upstream NTP kaynakları)
+     - Server modu: `allow 10.0.0.0/24` + `allow 10.10.0.0/24` (LAN + VPN peer'ları)
+     - `local stratum 10` — upstream'ler ulaşılamaz olsa bile LAN'a zaman servisi ver
+     - `rtcsync` — sistem saatini RTC'ye yaz
+     - `makestep 1.0 3` — ilk senkronizasyonda büyük fark varsa anında düzelt
+   - `chronyc sources` parse: upstream kaynak durumu, offset, jitter
+   - `chronyc tracking` parse: son senkronizasyon, drift, stratum
+   - Agent ops: `ntp.reload` (systemctl reload chronyd), `ntp.force_sync` (chronyc makestep)
+   - nftables entegrasyonu: UDP 123 sadece LAN + VPN subnet'ten kabul (input chain)
+   - DHCP entegrasyonu: dnsmasq config'e `dhcp-option=option:ntp-server,10.0.0.1` ekle
+     → LAN cihazları DHCP ile otomatik olarak router'ı NTP sunucu olarak alır
+   - Web UI: senkronizasyon durumu (offset, stratum, kaynak listesi), upstream değiştirme, force sync butonu
+10. Agent ops: `syslog.reload` (systemctl reload rsyslog)
+11. **i18n:** Storage, syslog, NTP, settings, backup sayfaları `{{ t .Lang "storage.*" }}`, `{{ t .Lang "syslog.*" }}`, `{{ t .Lang "ntp.*" }}`, `{{ t .Lang "settings.*" }}` ile
+12. **i18n doğrulama:** Tüm locale JSON dosyalarında eksik anahtar testi (build time check)
 
 Manuel doğrulama:
 - RAID durumu doğru gösteriliyor mu
@@ -1566,7 +1620,12 @@ Manuel doğrulama:
 - **Syslog sunucu:** başka cihazdan `logger -n 10.0.0.1 "test"` → log görünüyor mu
 - **Syslog client:** router logları harici sunucuya iletiliyor mu
 - **Syslog Web UI:** host filtresi, severity filtresi, pagination çalışıyor mu
-- TR/EN dillerinde storage, syslog ve settings sayfaları doğru mu
+- **NTP sunucu:** LAN cihazından `ntpdate -q 10.0.0.1` → zaman sorgulanabiliyor mu
+- **NTP client:** `chronyc tracking` → upstream'e senkronize mi, offset düşük mü
+- **NTP DHCP:** LAN cihazı DHCP ile NTP sunucu adresi alıyor mu (`dhclient -v`)
+- **NTP Web UI:** kaynak listesi, offset, stratum doğru gösteriliyor mu, force sync çalışıyor mu
+- **NTP firewall:** WAN'dan UDP 123'e erişim engellenmiş mi
+- TR/EN dillerinde storage, syslog, NTP ve settings sayfaları doğru mu
 - **i18n bütünlük:** `tr.json` ve `en.json` aynı anahtarlara sahip mi (eksik anahtar yok)
 
 ---
@@ -1654,6 +1713,6 @@ firewallSvc.Apply(rules)
 | 7     | SQM/QoS                               | 3   | 24        |
 | 8     | WireGuard VPN (Client+Server) + PBR   | 8   | 32        |
 | 9     | Samba NAS + M3U                       | 3   | 35        |
-| 10    | Storage + Syslog + Backup + Hardening | 4   | 39        |
+| 10    | Storage + Syslog + NTP + Backup       | 5   | 40        |
 
-**Toplam: ~39 geliştirme günü** (tek geliştirici, her gün 4-6 saat efektif çalışma varsayımı)
+**Toplam: ~40 geliştirme günü** (tek geliştirici, her gün 4-6 saat efektif çalışma varsayımı)
