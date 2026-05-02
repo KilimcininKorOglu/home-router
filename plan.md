@@ -1978,11 +1978,11 @@ Oluşturulacak dosyalar:
 - `web/static/css/pages.css`
 
 Adımlar:
-1. Monitor service: goroutine, 1s interval — CPU, RAM, temp, throughput
+1. ✅ Monitor service: goroutine, 1s interval — CPU, RAM, temp, throughput
    - `/proc/stat` (CPU), `/proc/meminfo` (RAM), `/sys/class/thermal` (temp)
    - `/proc/net/dev` (interface byte counters → throughput hesaplama)
-2. SSE broker: channel-based pub/sub, goroutine per client
-3. SSE endpoint: `GET /events/stats` → `text/event-stream`
+2. ✅ SSE broker: channel-based pub/sub, goroutine per client
+3. ✅ SSE endpoint: `GET /events/stats` → `text/event-stream`
 4. **Dashboard stat kartları (X design system):**
    - `.card` bileşeni: `--bg-surface` zemin, `--border-color` kenar, 16px radius
    - Her kart: ikon + etiket (`--text-secondary`) + değer (`--text-primary`, 23px, bold)
