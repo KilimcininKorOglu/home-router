@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -152,6 +153,41 @@ func (s *DHCPService) GetDeviceList() []DeviceInfo {
 		}
 	}
 	return devices
+}
+
+func (s *DHCPService) RebuildDNSRecords(ctx context.Context, domain string) error {
+	netutil.Run(ctx, "unbound-control", "flush_zone", domain)
+
+	leases, _ := s.GetLeases()
+	staticLeases := s.cfg.DHCP.StaticLeases
+
+	var allEntries []struct{ hostname, ip string }
+
+	for _, l := range leases {
+		if l.Hostname != "" && l.Active {
+			allEntries = append(allEntries, struct{ hostname, ip string }{l.Hostname, l.IP})
+		}
+	}
+	for _, sl := range staticLeases {
+		if sl.Hostname != "" {
+			allEntries = append(allEntries, struct{ hostname, ip string }{sl.Hostname, sl.IP})
+		}
+	}
+
+	for _, e := range allEntries {
+		fqdn := e.hostname + "." + domain
+		netutil.Run(ctx, "unbound-control", "local_data", fqdn+". 300 IN A "+e.ip)
+		netutil.Run(ctx, "unbound-control", "local_data", e.hostname+". 300 IN A "+e.ip)
+
+		parts := strings.Split(e.ip, ".")
+		if len(parts) == 4 {
+			ptr := parts[3] + "." + parts[2] + "." + parts[1] + "." + parts[0] + ".in-addr.arpa."
+			netutil.Run(ctx, "unbound-control", "local_data", ptr+" 300 IN PTR "+fqdn+".")
+		}
+	}
+
+	log.Printf("DNS records rebuilt for domain %s: %d entries", domain, len(allEntries))
+	return nil
 }
 
 type DeviceInfo struct {

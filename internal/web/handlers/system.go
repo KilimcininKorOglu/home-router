@@ -9,6 +9,7 @@ import (
 	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
 	"github.com/KilimcininKorOglu/home-router/internal/netutil"
+	"github.com/KilimcininKorOglu/home-router/internal/services"
 	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -16,10 +17,11 @@ import (
 type SystemHandler struct {
 	renderer *tmpl.Renderer
 	cfg      *config.Config
+	dhcp     *services.DHCPService
 }
 
-func NewSystemHandler(renderer *tmpl.Renderer, cfg *config.Config) *SystemHandler {
-	return &SystemHandler{renderer: renderer, cfg: cfg}
+func NewSystemHandler(renderer *tmpl.Renderer, cfg *config.Config, dhcp *services.DHCPService) *SystemHandler {
+	return &SystemHandler{renderer: renderer, cfg: cfg, dhcp: dhcp}
 }
 
 func (h *SystemHandler) HandleSettingsPage(w http.ResponseWriter, r *http.Request) {
@@ -115,12 +117,19 @@ func (h *SystemHandler) HandleUpdateHostname(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	oldDomain := h.cfg.System.Domain
 	h.cfg.System.Hostname = hostname
 	if domain != "" {
 		h.cfg.System.Domain = domain
 	}
 
 	netutil.Run(context.Background(), "hostnamectl", "set-hostname", hostname)
+
+	if domain != "" && domain != oldDomain {
+		if h.dhcp != nil {
+			h.dhcp.RebuildDNSRecords(context.Background(), h.cfg.System.Domain)
+		}
+	}
 
 	log.Printf("hostname changed to %s.%s", hostname, h.cfg.System.Domain)
 

@@ -100,7 +100,7 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, agentClient *agent.Client, we
 
 	monitorSvc := services.NewMonitorService()
 	dashboardHandler := handlers.NewDashboardHandler(renderer, monitorSvc, pppoeSvc, dhcpSvc)
-	settingsHandler := handlers.NewSystemHandler(renderer, cfg)
+	settingsHandler := handlers.NewSystemHandler(renderer, cfg, dhcpSvc)
 	sseBroker := NewSSEBroker()
 
 	s := &Server{
