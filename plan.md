@@ -1644,11 +1644,11 @@ Adımlar:
      - Yenileme sonrası `tls.Config.GetCertificate` callback ile sıfır-downtime geçiş
    - `http.Server.TLSConfig`: TLS 1.2+ zorunlu, HSTS yok (LAN IP erişimi bozar)
    - Web UI settings sayfasında: mod seçimi, sertifika durumu (expire tarihi, issuer), yeniden üretme butonu
-9. Session: `gorilla/sessions` ile cookie-based (encrypted, httpOnly, secure, sameSite)
-9. bcrypt ile password verify
-10. Rate limiting: token bucket (stdlib `time.Ticker` + `sync.Map`)
-11. CSRF: double-submit cookie (custom header `X-CSRF-Token`)
-12. LAN-only: middleware'de source IP kontrolü
+9. ✅ Session: `gorilla/sessions` ile cookie-based (encrypted, httpOnly, secure, sameSite)
+9. ✅ bcrypt ile password verify
+10. ✅ Rate limiting: token bucket (stdlib `time.Ticker` + `sync.Map`)
+11. ✅ CSRF: double-submit cookie (custom header `X-CSRF-Token`)
+12. ✅ LAN-only: middleware'de source IP kontrolü
 13. **HTMX base layout (X design system uygulaması):**
     - Sidebar (sol, 275px): logo + navigasyon (`nav-item` rounded pill, `{{ t .Lang "nav.*" }}`)
     - İçerik (orta, max 600px): sayfa içeriği
