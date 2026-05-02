@@ -1557,13 +1557,13 @@ Oluşturulacak dosyalar:
 - `deploy/install.sh`
 
 Adımlar:
-1. `go mod init`, Makefile (build/test/lint)
-2. CLI: `cobra` kullanmadan stdlib `flag` + subcommand dispatch
-3. Config: YAML struct (`Language` field dahil), atomic file write (tmp→fsync→rename)
-4. AES-256-GCM: credential encrypt/decrypt (Go `crypto/aes` + `crypto/cipher`)
-5. **i18n paketi:** JSON locale dosyalarını `embed.FS`'den yükle, `T(lang, key)` ve `WithParams(lang, key, params)` fonksiyonları
-6. **i18n middleware:** request'ten dil tespit et (cookie → Accept-Language → config default), `context.WithValue` ile handler'lara ilet
-7. **Locale JSON dosyaları:** `tr.json` ve `en.json` — tüm UI anahtarları (nav, dashboard, pppoe, firewall, vpn, qos, nas, storage, settings, common, auth)
+1. ✅ `go mod init`, Makefile (build/test/lint)
+2. ✅ CLI: `cobra` kullanmadan stdlib `flag` + subcommand dispatch
+3. ✅ Config: YAML struct (`Language` field dahil), atomic file write (tmp→fsync→rename)
+4. ✅ AES-256-GCM: credential encrypt/decrypt (Go `crypto/aes` + `crypto/cipher`)
+5. ✅ **i18n paketi:** JSON locale dosyalarını `embed.FS`'den yükle, `T(lang, key)` ve `WithParams(lang, key, params)` fonksiyonları
+6. ✅ **i18n middleware:** request'ten dil tespit et (cookie → Accept-Language → config default), `context.WithValue` ile handler'lara ilet
+7. ✅ **Locale JSON dosyaları:** `tr.json` ve `en.json` — tüm UI anahtarları (nav, dashboard, pppoe, firewall, vpn, qos, nas, storage, settings, common, auth)
 8. Agent server: `net.Listen("unix", socketPath)` + goroutine per connection
 9. JSON-RPC 2.0 protocol: `{"method": "pppoe.connect", "params": {...}, "id": 1}`
 10. Agent client: dial UDS, send request, read response, timeout
