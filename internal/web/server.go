@@ -260,6 +260,7 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 	mux.Handle("POST /nas/shares", authed(http.HandlerFunc(s.nas.HandleAddShare)))
 	mux.Handle("DELETE /nas/shares/{name}", authed(http.HandlerFunc(s.nas.HandleDeleteShare)))
 	mux.Handle("POST /nas/m3u/sync", authed(http.HandlerFunc(s.nas.HandleSyncM3U)))
+	mux.Handle("POST /nas/m3u/discover-groups", authed(http.HandlerFunc(s.nas.HandleDiscoverGroups)))
 	mux.Handle("GET /storage", authed(http.HandlerFunc(s.storageh.HandlePage)))
 	mux.Handle("GET /syslog", authed(http.HandlerFunc(s.syslogh.HandlePage)))
 	mux.Handle("GET /ntp", authed(http.HandlerFunc(s.ntph.HandlePage)))

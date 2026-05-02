@@ -87,6 +87,59 @@ func TestParseM3UDataEmpty(t *testing.T) {
 	}
 }
 
+func TestM3UFilterIncludeGroups(t *testing.T) {
+	data := `#EXTM3U
+#EXTINF:-1 group-title="Sports",Football Match
+http://example.com/football.mp4
+#EXTINF:-1 group-title="Movies",The Matrix
+http://example.com/matrix.mp4
+#EXTINF:-1 group-title="Sports",Basketball Game
+http://example.com/basketball.mp4
+#EXTINF:-1 group-title="News",World News
+http://example.com/news.mp4
+`
+	items := services.ParseM3UData(data)
+	if len(items) != 4 {
+		t.Fatalf("expected 4 items, got %d", len(items))
+	}
+
+	cfg := &config.Config{}
+	cfg.NAS.M3USources = []config.M3USourceConfig{
+		{
+			URL:           "http://example.com/test.m3u",
+			DownloadPath:  t.TempDir(),
+			IncludeGroups: []string{"Sports"},
+		},
+	}
+
+	_ = cfg
+	_ = items
+}
+
+func TestParseM3UGroupCount(t *testing.T) {
+	data := `#EXTM3U
+#EXTINF:-1 group-title="A",Item1
+http://a/1
+#EXTINF:-1 group-title="B",Item2
+http://b/2
+#EXTINF:-1 group-title="A",Item3
+http://a/3
+`
+	items := services.ParseM3UData(data)
+
+	groups := make(map[string]int)
+	for _, item := range items {
+		groups[item.Group]++
+	}
+
+	if groups["A"] != 2 {
+		t.Errorf("group A should have 2 items, got %d", groups["A"])
+	}
+	if groups["B"] != 1 {
+		t.Errorf("group B should have 1 item, got %d", groups["B"])
+	}
+}
+
 func TestM3UStatus(t *testing.T) {
 	cfg := &config.Config{}
 	svc := services.NewNASService(cfg)

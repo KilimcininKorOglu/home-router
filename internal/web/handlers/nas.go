@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -81,4 +82,24 @@ func (h *NASHandler) HandleSyncM3U(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/nas", http.StatusSeeOther)
+}
+
+func (h *NASHandler) HandleDiscoverGroups(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	url := r.FormValue("url")
+	if url == "" {
+		http.Error(w, "url required", http.StatusBadRequest)
+		return
+	}
+
+	groups, err := h.nas.DiscoverM3UGroups(r.Context(), url)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	for _, g := range groups {
+		fmt.Fprintf(w, `<label style="display:flex;align-items:center;gap:var(--space-xs);cursor:pointer;padding:var(--space-xs) 0;"><input type="checkbox" name="includeGroups" value="%s" checked> %s</label>`, g, g)
+	}
 }

@@ -390,9 +390,11 @@ type ShareConfig struct {
 }
 
 type M3USourceConfig struct {
-	URL          string `yaml:"url"`
-	DownloadPath string `yaml:"downloadPath"`
-	Schedule     string `yaml:"schedule"`
+	URL           string   `yaml:"url"`
+	DownloadPath  string   `yaml:"downloadPath"`
+	Schedule      string   `yaml:"schedule"`
+	IncludeGroups []string `yaml:"includeGroups"`
+	ExcludeGroups []string `yaml:"excludeGroups"`
 }
 
 type SyslogConfig struct {

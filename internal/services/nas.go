@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"text/template"
@@ -122,9 +123,10 @@ func (s *NASService) SyncM3U(ctx context.Context) error {
 			continue
 		}
 
+		filtered := filterM3UItems(items, source.IncludeGroups, source.ExcludeGroups)
 		os.MkdirAll(source.DownloadPath, 0o755)
 
-		for _, item := range items {
+		for _, item := range filtered {
 			groupDir := filepath.Join(source.DownloadPath, sanitizePath(item.Group))
 			os.MkdirAll(groupDir, 0o755)
 
@@ -280,6 +282,59 @@ func ParseM3UData(data string) []M3UItem {
 	}
 
 	return items
+}
+
+func filterM3UItems(items []M3UItem, includeGroups, excludeGroups []string) []M3UItem {
+	if len(includeGroups) == 0 && len(excludeGroups) == 0 {
+		return items
+	}
+
+	includeSet := make(map[string]bool, len(includeGroups))
+	for _, g := range includeGroups {
+		includeSet[strings.ToLower(g)] = true
+	}
+
+	excludeSet := make(map[string]bool, len(excludeGroups))
+	for _, g := range excludeGroups {
+		excludeSet[strings.ToLower(g)] = true
+	}
+
+	var filtered []M3UItem
+	for _, item := range items {
+		groupLower := strings.ToLower(item.Group)
+
+		if len(excludeSet) > 0 && excludeSet[groupLower] {
+			continue
+		}
+
+		if len(includeSet) > 0 && !includeSet[groupLower] {
+			continue
+		}
+
+		filtered = append(filtered, item)
+	}
+
+	return filtered
+}
+
+func (s *NASService) DiscoverM3UGroups(ctx context.Context, sourceURL string) ([]string, error) {
+	items, err := downloadAndParseM3U(ctx, sourceURL)
+	if err != nil {
+		return nil, err
+	}
+
+	groupSet := make(map[string]bool)
+	for _, item := range items {
+		groupSet[item.Group] = true
+	}
+
+	var groups []string
+	for g := range groupSet {
+		groups = append(groups, g)
+	}
+
+	sort.Strings(groups)
+	return groups, nil
 }
 
 func sanitizePath(s string) string {
