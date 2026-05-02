@@ -6,8 +6,9 @@ Turkcell Superonline'ın ISP modemleri bufferbloat sorununa neden oluyor ve 1 Gb
 
 ## Kurallar
 
-1. **Her değişiklikte commit atılır.** Fonksiyonel bir birim tamamlandığında hemen commit.
-2. **Asla yama yapılmaz.** Sorunun kök nedeni bulunur ve oradan çözülür.
+1. **Her deği��iklikte commit atılır.** Fonksiyonel bir birim tamamlandığında hemen commit.
+2. **Asla yama yapılmaz.** Sorunun kök nedeni bulunur ve oradan çöz��lür.
+3. **Çoklu dil desteği (i18n) ilk günden zorunludur.** Tüm UI metinleri locale JSON dosyalarından gelir, template'lere sabit metin yazılmaz.
 
 ## Neden Go + HTMX?
 
@@ -95,7 +96,120 @@ Tarayıcı                          Go Sunucu
 - JS minimal: sadece chart (Canvas API) ve drag-drop için küçük helper'lar
 - Tema: CSS custom properties + `prefers-color-scheme`
 
-### 3. Atomic Network Changes
+### 3. Internationalization (i18n) — İlk Günden
+
+Tüm UI metinleri JSON locale dosyalarından yüklenir. Template'lere sabit metin yazılmaz.
+
+**Desteklenen diller:** Türkçe (`tr`), İngilizce (`en`)
+
+```
+web/locales/
+├── tr.json    # Türkçe (varsayılan)
+└── en.json    # İngilizce
+```
+
+**JSON yapısı** — nokta-ayrılmış düz anahtar (flat keys, nested değil):
+
+```json
+{
+    "nav.dashboard": "Dashboard",
+    "nav.network": "Network",
+    "nav.firewall": "Firewall",
+    "nav.vpn": "VPN",
+    "nav.dns": "DNS",
+    "nav.qos": "QoS",
+    "nav.nas": "NAS",
+    "nav.storage": "Storage",
+    "nav.settings": "Settings",
+    "dashboard.title": "Dashboard",
+    "dashboard.uptime": "Uptime",
+    "dashboard.wanIp": "WAN IP",
+    "dashboard.activeDevices": "Active Devices",
+    "dashboard.cpuUsage": "CPU Usage",
+    "dashboard.ramUsage": "RAM Usage",
+    "dashboard.download": "Download",
+    "dashboard.upload": "Upload",
+    "pppoe.connect": "Connect",
+    "pppoe.disconnect": "Disconnect",
+    "pppoe.status.connected": "Connected",
+    "pppoe.status.disconnected": "Disconnected",
+    "pppoe.confirmConnect": "Start PPPoE connection?",
+    "firewall.title": "Firewall Rules",
+    "firewall.addRule": "Add Rule",
+    "firewall.portForward": "Port Forward",
+    "firewall.watchdogConfirm": "New rules applied. Will be reverted in 30 seconds if not confirmed.",
+    "firewall.confirm": "Confirm",
+    "vpn.title": "VPN Management",
+    "vpn.addTunnel": "Add Tunnel",
+    "vpn.assignDevice": "Drag device to assign to VPN",
+    "vpn.unassigned": "Unassigned Devices",
+    "common.save": "Save",
+    "common.cancel": "Cancel",
+    "common.delete": "Delete",
+    "common.confirm": "Confirm",
+    "common.loading": "Loading...",
+    "common.success": "Operation successful",
+    "common.error": "An error occurred",
+    "auth.login": "Login",
+    "auth.password": "Password",
+    "auth.wrongPassword": "Invalid password",
+    "auth.logout": "Logout"
+}
+```
+
+**Go i18n paketi:**
+
+```go
+// internal/i18n/i18n.go
+package i18n
+
+type Locale struct {
+    Code     string            // "tr", "en"
+    Messages map[string]string // flat key → translated string
+}
+
+type I18n struct {
+    locales  map[string]*Locale
+    fallback string // "tr"
+}
+
+func (i *I18n) T(lang, key string) string // döndür: messages[key] veya fallback
+func (i *I18n) WithParams(lang, key string, params map[string]string) string // parametreli: "Hoş geldin, {{name}}"
+```
+
+**Template'lerde kullanım:**
+
+```html
+<!-- Her template'te .Lang context'ten gelir -->
+<h1>{{ t .Lang "dashboard.title" }}</h1>
+<button hx-post="/pppoe/connect"
+        hx-confirm="{{ t .Lang "pppoe.confirmConnect" }}">
+    {{ t .Lang "pppoe.connect" }}
+</button>
+
+<!-- Parametreli çeviri -->
+<p>{{ tp .Lang "dashboard.connectedFor" "duration" .Uptime }}</p>
+```
+
+**Dil tespiti sırası:**
+1. `lang` cookie (kullanıcı tercihi)
+2. `Accept-Language` header
+3. Varsayılan: `tr`
+
+**Dil değiştirme:**
+```html
+<!-- sidebar veya settings'te -->
+<div class="lang-switch">
+    <button hx-post="/settings/lang" hx-vals='{"lang":"tr"}'
+            class="{{ if eq .Lang "tr" }}active{{ end }}">TR</button>
+    <button hx-post="/settings/lang" hx-vals='{"lang":"en"}'
+            class="{{ if eq .Lang "en" }}active{{ end }}">EN</button>
+</div>
+```
+
+`POST /settings/lang` → `lang` cookie set → `HX-Refresh: true` header → tam sayfa yenileme.
+
+### 4. Atomic Network Changes (eski 3)
 
 ```go
 func (s *FirewallService) Apply(ctx context.Context, rules *NftRuleset) error {
@@ -120,18 +234,18 @@ func (s *FirewallService) Apply(ctx context.Context, rules *NftRuleset) error {
 
 Agent'ta 30 saniyelik watchdog: apply sonrası web'den onay gelmezse otomatik rollback.
 
-### 4. VPN Policy Routing
+### 5. VPN Policy Routing
 
 ```
 nftables fwmark (kaynak IP'ye göre) → ip rule fwmark X lookup table_wgN → per-table default route
 ct mark ile reply paketlerde fwmark korunur
 ```
 
-### 5. AdGuard Home Integration
+### 6. AdGuard Home Integration
 
 AdGuard Home tek DHCP/DNS otoritesi. Router uygulaması kendi DHCP sunucusu çalıştırmaz — tüm DHCP/DNS yönetimi AGH REST API üzerinden proxy edilir (`net/http` client).
 
-### 6. Config Yönetimi
+### 7. Config Yönetimi
 
 ```go
 // YAML config → Go struct (compile-time type safety)
@@ -198,14 +312,17 @@ home-router/
 │   │   ├── storage.go            # mdadm + smartctl
 │   │   ├── monitor.go            # Sistem istatistikleri toplayıcı (goroutine)
 │   │   └── backup.go             # Config export/import
+│   ├── i18n/
+│   │   ├── i18n.go               # Locale yükleme, T() ve WithParams() fonksiyonları
+│   │   └── middleware.go         # Dil tespiti middleware (cookie → Accept-Language → default)
 │   ├── netutil/
 │   │   ├── atomic.go             # AtomicChange struct + rollback logic
 │   │   ├── exec.go               # Güvenli exec.Command wrapper
 │   │   ├── iface.go              # Interface bilgisi okuma (/proc/net/dev)
 │   │   └── validate.go           # IP, CIDR, MAC, port doğrulama
 │   └── tmpl/
-│       ├── render.go             # Template rendering helper'ları
-│       └── funcs.go              # Template fonksiyonları (formatBytes, humanTime, ...)
+│       ├── render.go             # Template rendering helper'ları + i18n entegrasyonu
+│       └── funcs.go              # Template fonksiyonları (t, tp, formatBytes, humanTime, ...)
 ├── web/
 │   ├── templates/
 │   │   ├── layouts/
@@ -248,7 +365,10 @@ home-router/
 │   │   │   ├── chart.js         # Canvas-based grafik helper (minimal, custom)
 │   │   │   └── app.js           # Tema toggle, chart init (~50 satır)
 │   │   └── icons/               # SVG ikonlar (inline veya sprite)
-│   └── embed.go                  # go:embed ile static + template'leri binary'ye göm
+│   ├── locales/
+│   │   ├── tr.json               # Türkçe çeviriler (varsayılan dil)
+│   │   └── en.json               # İngilizce çeviriler
+│   └── embed.go                  # go:embed ile static + template + locale'leri binary'ye göm
 ├── configs/
 │   ├── sysconf/                  # Sistem config şablonları
 │   │   ├── nftables.conf.tmpl    # nftables ruleset (Go text/template)
@@ -286,11 +406,11 @@ package web
 
 import "embed"
 
-//go:embed templates/* static/*
+//go:embed templates/* static/* locales/*
 var EmbeddedFS embed.FS
 ```
 
-Tüm HTML template'leri, CSS, JS, ikonlar binary'nin içine gömülür. Deploy = tek dosya kopyala.
+Tüm HTML template'leri, CSS, JS, ikonlar ve locale JSON dosyaları binary'nin içine gömülür. Deploy = tek dosya kopyala.
 
 ---
 
@@ -300,6 +420,7 @@ Tüm HTML template'leri, CSS, JS, ikonlar binary'nin içine gömülür. Deploy =
 system:
   hostname: "home-router"
   timezone: "Europe/Istanbul"
+  language: "tr"                         # tr | en (varsayılan dil, cookie override eder)
   adminPasswordHash: "$2a$12$..."       # bcrypt
   sessionSecret: "..."                   # 32-byte hex, cookie signing
   webPort: 8443
@@ -387,12 +508,13 @@ storage:
 
 Go'da HTMX ile iki tür endpoint var: **sayfa** (tam HTML) ve **partial** (HTML fragment).
 
-### Auth
+### Auth + i18n
 | Method | Path               | Tür     | Açıklama                              |
 |--------|--------------------|---------|---------------------------------------|
 | GET    | /login             | Sayfa   | Login formu render                    |
 | POST   | /login             | Partial | Oturum aç → cookie set → redirect    |
 | POST   | /logout            | Partial | Oturum kapat → cookie clear → redirect|
+| POST   | /settings/lang     | Partial | Dil değiştir → lang cookie → HX-Refresh |
 
 ### Dashboard
 | Method | Path                    | Tür     | Açıklama                          |
@@ -548,28 +670,29 @@ deploy: build
 <!-- base.html layout'ta SSE bağlantısı -->
 <div hx-ext="sse" sse-connect="/events/stats">
     <div id="stats-cards" sse-swap="stats" hx-swap="innerHTML">
-        {{ template "partials/stats_card.html" .Stats }}
+        {{ template "partials/stats_card.html" . }}
     </div>
 </div>
 ```
 
-### PPPoE Bağlantı Butonu
+### PPPoE Bağlantı Butonu (i18n)
 ```html
 <button hx-post="/pppoe/connect"
         hx-target="#wan-status"
         hx-swap="outerHTML"
-        hx-confirm="PPPoE bağlantısı başlatılsın mı?"
+        hx-confirm="{{ t .Lang "pppoe.confirmConnect" }}"
         hx-indicator="#wan-spinner">
-    Bağlan
+    {{ t .Lang "pppoe.connect" }}
 </button>
 <div id="wan-status">
-    {{ template "partials/wan-status.html" .WanStatus }}
+    {{ template "partials/wan-status.html" . }}
 </div>
 ```
 
-### VPN Drag-and-Drop Cihaz Ataması
+### VPN Drag-and-Drop Cihaz Ataması (i18n)
 ```html
 <!-- Cihaz listesi (sol panel) -->
+<h3>{{ t .Lang "vpn.unassigned" }}</h3>
 <div id="unassigned-devices" class="device-pool">
     {{ range .UnassignedDevices }}
     <div class="device-card" draggable="true"
@@ -590,23 +713,33 @@ deploy: build
      hx-trigger="drop"
      hx-vals='js:{"mac": event.dataTransfer.getData("text/mac"), "tunnel": "{{ .Name }}"}'>
     <h3>{{ .Name }}</h3>
+    <p class="drop-hint">{{ t $.Lang "vpn.assignDevice" }}</p>
     {{ range .AssignedDevices }}
-        {{ template "partials/vpn_device.html" . }}
+        {{ template "partials/vpn_device.html" $ }}
     {{ end }}
 </div>
 {{ end }}
 ```
 
-### Firewall Watchdog Onay
+### Firewall Watchdog Onay (i18n)
 ```html
-<!-- Firewall kuralı uygulandıktan sonra gösterilir -->
 <div id="fw-confirm" class="confirm-banner"
      hx-post="/firewall/confirm"
      hx-trigger="click"
      hx-swap="outerHTML">
-    <p>Yeni kurallar uygulandı. 30 saniye içinde onaylanmazsa geri alınacak.</p>
+    <p>{{ t .Lang "firewall.watchdogConfirm" }}</p>
     <div class="countdown" data-seconds="30"></div>
-    <button>Onayla</button>
+    <button>{{ t .Lang "firewall.confirm" }}</button>
+</div>
+```
+
+### Dil Değiştirme (Sidebar)
+```html
+<div class="lang-switch">
+    <button hx-post="/settings/lang" hx-vals='{"lang":"tr"}'
+            class="{{ if eq .Lang "tr" }}active{{ end }}">TR</button>
+    <button hx-post="/settings/lang" hx-vals='{"lang":"en"}'
+            class="{{ if eq .Lang "en" }}active{{ end }}">EN</button>
 </div>
 ```
 
@@ -614,8 +747,8 @@ deploy: build
 
 ## Implementation Phases
 
-### Phase 1: Proje İskeleti + Agent IPC (3 gün)
-**Hedef:** Go module, CLI skeleton, privilege-separated agent/web mimarisi, UDS IPC.
+### Phase 1: Proje İskeleti + Agent IPC + i18n Altyapısı (3 gün)
+**Hedef:** Go module, CLI skeleton, privilege-separated agent/web mimarisi, UDS IPC, i18n çekirdek paketi.
 
 Oluşturulacak dosyalar:
 - `go.mod`, `go.sum`
@@ -628,8 +761,12 @@ Oluşturulacak dosyalar:
 - `internal/config/crypto.go` — AES-256-GCM encrypt/decrypt
 - `internal/config/defaults.go` — Varsayılan config
 - `internal/config/validate.go` — Config doğrulama
+- `internal/i18n/i18n.go` — Locale yükleme, T(), WithParams()
+- `internal/i18n/middleware.go` — Dil tespiti middleware (cookie → Accept-Language → default)
 - `internal/netutil/atomic.go` — AtomicChange struct
 - `internal/netutil/exec.go` — Güvenli exec.Command wrapper
+- `web/locales/tr.json` — Türkçe çeviriler (tüm anahtarlar)
+- `web/locales/en.json` — İngilizce çeviriler (tüm anahtarlar)
 - `configs/defaults/router.yaml` — Varsayılan config dosyası
 - `deploy/systemd/home-router-agent.service`
 - `deploy/systemd/home-router-web.service`
@@ -639,35 +776,40 @@ Oluşturulacak dosyalar:
 Adımlar:
 1. `go mod init`, Makefile (build/test/lint)
 2. CLI: `cobra` kullanmadan stdlib `flag` + subcommand dispatch
-3. Config: YAML struct, atomic file write (tmp→fsync→rename)
+3. Config: YAML struct (`Language` field dahil), atomic file write (tmp→fsync→rename)
 4. AES-256-GCM: credential encrypt/decrypt (Go `crypto/aes` + `crypto/cipher`)
-5. Agent server: `net.Listen("unix", socketPath)` + goroutine per connection
-6. JSON-RPC 2.0 protocol: `{"method": "pppoe.connect", "params": {...}, "id": 1}`
-7. Agent client: dial UDS, send request, read response, timeout
-8. Op whitelist: yalnızca kayıtlı method'lar çalışır
-9. systemd unit dosyaları + install.sh
-10. Unit test: agent IPC round-trip
+5. **i18n paketi:** JSON locale dosyalarını `embed.FS`'den yükle, `T(lang, key)` ve `WithParams(lang, key, params)` fonksiyonları
+6. **i18n middleware:** request'ten dil tespit et (cookie → Accept-Language → config default), `context.WithValue` ile handler'lara ilet
+7. **Locale JSON dosyaları:** `tr.json` ve `en.json` — tüm UI anahtarları (nav, dashboard, pppoe, firewall, vpn, qos, nas, storage, settings, common, auth)
+8. Agent server: `net.Listen("unix", socketPath)` + goroutine per connection
+9. JSON-RPC 2.0 protocol: `{"method": "pppoe.connect", "params": {...}, "id": 1}`
+10. Agent client: dial UDS, send request, read response, timeout
+11. Op whitelist: yalnızca kayıtlı method'lar çalışır
+12. systemd unit dosyaları + install.sh
+13. Unit test: agent IPC round-trip + i18n T() fonksiyonu + eksik anahtar fallback
 
 Manuel doğrulama:
 - `go build ./...` hatasız derleniyor mu
 - `go test ./... -race` geçiyor mu
 - Agent socket test: JSON-RPC ping/pong
+- i18n test: `T("tr", "nav.dashboard")` → `"Gösterge Paneli"`, `T("en", "nav.dashboard")` → `"Dashboard"`
+- Eksik anahtar: `T("en", "nonexistent.key")` → fallback `"tr"` dili → bulamazsa key'i döndür
 
-### Phase 2: Web Sunucu + Auth + HTMX Layout (3 gün)
-**Hedef:** HTTP sunucu, session auth, HTMX base layout, login sayfası, middleware chain.
+### Phase 2: Web Sunucu + Auth + HTMX Layout + i18n Entegrasyonu (3 gün)
+**Hedef:** HTTP sunucu, session auth, HTMX base layout, login sayfası, middleware chain, i18n template entegrasyonu.
 
 Oluşturulacak dosyalar:
-- `internal/web/server.go` — HTTP sunucu setup
-- `internal/web/middleware.go` — Auth, CSRF, rate limit, LAN-only
+- `internal/web/server.go` — HTTP sunucu setup (i18n middleware dahil)
+- `internal/web/middleware.go` — Auth, CSRF, rate limit, LAN-only, i18n
 - `internal/web/auth.go` — Login/logout, bcrypt, session cookie
-- `internal/tmpl/render.go` — Template rendering helper
-- `internal/tmpl/funcs.go` — Template fonksiyonları
-- `web/embed.go` — go:embed
-- `web/templates/layouts/base.html` — Ana layout (sidebar + content)
+- `internal/tmpl/render.go` — Template rendering helper (i18n FuncMap entegrasyonu)
+- `internal/tmpl/funcs.go` — Template fonksiyonları (`t`, `tp`, formatBytes, humanTime)
+- `web/embed.go` — go:embed (templates + static + locales)
+- `web/templates/layouts/base.html` — Ana layout (sidebar + content + lang-switch)
 - `web/templates/layouts/auth.html` — Login layout
 - `web/templates/pages/login.html`
 - `web/templates/pages/dashboard.html` (placeholder)
-- `web/templates/partials/sidebar.html`
+- `web/templates/partials/sidebar.html` — Navigasyon (tüm etiketler `{{ t }}` ile)
 - `web/templates/partials/toast.html`
 - `web/static/css/reset.css`
 - `web/static/css/variables.css`
@@ -677,22 +819,32 @@ Oluşturulacak dosyalar:
 - `web/static/js/app.js`
 
 Adımlar:
-1. `net/http.ServeMux` ile routing (Go 1.22+ pattern: `GET /login`, `POST /login`)
+1. `net/http.ServeMux` ile routing (Go 1.22+ pattern: `GET /login`, `POST /login`, `POST /settings/lang`)
 2. `html/template` ile layout inheritance: `base.html` → `{{block "content" .}}`
-3. `go:embed` ile tüm static + template'leri binary'ye göm
-4. Session: `gorilla/sessions` ile cookie-based (encrypted, httpOnly, secure, sameSite)
-5. bcrypt ile password verify
-6. Rate limiting: token bucket (stdlib `time.Ticker` + `sync.Map`)
-7. CSRF: double-submit cookie (custom header `X-CSRF-Token`)
-8. LAN-only: middleware'de source IP kontrolü
-9. HTMX base layout: sidebar navigasyon, content area, toast
-10. Dark/light tema: CSS custom properties + JS toggle
+3. **Template FuncMap'e i18n fonksiyonları ekle:**
+   - `t`: `func(lang, key string) string` → çeviri döndür
+   - `tp`: `func(lang, key string, params ...string) string` → parametreli çeviri
+4. **Her handler'da `.Lang` context'e ekle:** `data.Lang = i18n.LangFromContext(r.Context())`
+5. **Dil değiştirme handler:** `POST /settings/lang` → `lang` cookie set → `HX-Refresh: true`
+6. **`<html lang="{{ .Lang }}">` attribute'u** base layout'ta dinamik
+7. `go:embed` ile tüm static + template + locale dosyalarını binary'ye göm
+8. Session: `gorilla/sessions` ile cookie-based (encrypted, httpOnly, secure, sameSite)
+9. bcrypt ile password verify
+10. Rate limiting: token bucket (stdlib `time.Ticker` + `sync.Map`)
+11. CSRF: double-submit cookie (custom header `X-CSRF-Token`)
+12. LAN-only: middleware'de source IP kontrolü
+13. HTMX base layout: sidebar navigasyon (`{{ t .Lang "nav.dashboard" }}` vb.), content area, toast, lang-switch
+14. Dark/light tema: CSS custom properties + JS toggle
+15. **Tüm template'lerde sabit metin yok** — her label, buton, başlık `{{ t }}` fonksiyonu ile
 
 Manuel doğrulama:
 - `curl -k https://10.0.0.1:8443/login` → login sayfası dönüyor mu
-- Yanlış şifre → login sayfasında hata mesajı (HTMX swap)
+- Yanlış şifre → login sayfasında hata mesajı (HTMX swap), dile uygun mesaj
 - Doğru şifre → dashboard'a redirect
 - WAN IP'den erişim → 403
+- **Dil testi:** `Accept-Language: en` ile istek → İngilizce UI
+- **Dil değiştirme:** TR/EN butonlarına tıkla → sayfa seçilen dilde yenileniyor mu
+- **Sidebar:** tüm navigasyon etiketleri aktif dile göre mi
 
 ### Phase 3: PPPoE WAN Bağlantısı (3 gün)
 **Hedef:** PPPoE ile internete bağlanma, auto-reconnect, bağlantı durum izleme.
@@ -714,12 +866,14 @@ Adımlar:
 5. Agent operations: `pppoe.connect`, `pppoe.disconnect`, `pppoe.status`
 6. Network handler: interface listesi, WAN IP, gateway, uptime
 7. HTMX: bağlan/kes butonları → partial swap ile durum güncelleme
+8. **i18n:** Tüm template metinleri `{{ t .Lang "pppoe.*" }}` ile — buton etiketleri, durum mesajları, onay diyalogları
 
 Manuel doğrulama:
 - `ppp0` interface ayağa kalkıyor mu
 - İnternet erişimi: `ping 8.8.8.8`
 - Auto-reconnect: pppd kill sonrası tekrar bağlanıyor mu
 - Web UI'dan durum görünüyor + bağlan/kes çalışıyor mu
+- TR/EN dillerinde tüm PPPoE metinleri doğru mu
 
 ### Phase 4: nftables Firewall + NAT (4 gün)
 **Hedef:** Zone-based firewall, NAT masquerade, MSS clamping, port forwarding, watchdog rollback.
@@ -748,6 +902,7 @@ Adımlar:
 4. Port forwarding: DNAT + forward kuralı CRUD
 5. sysctl: `ip_forward=1`, ipv6 forwarding kapalı
 6. HTMX: kural ekleme formu, silme, watchdog onay banner'ı
+7. **i18n:** Tüm template metinleri `{{ t .Lang "firewall.*" }}` ile — kural tipleri, watchdog uyarısı, onay butonu
 
 Manuel doğrulama:
 - NAT çalışıyor mu (LAN → internet)
@@ -755,6 +910,7 @@ Manuel doğrulama:
 - Port forwarding çalışıyor mu
 - Watchdog: onaylanmayan değişiklik 30s sonra rollback oluyor mu
 - `nft list ruleset` beklenen kuralları gösteriyor mu
+- TR/EN dillerinde firewall metinleri doğru mu
 
 ### Phase 5: AdGuard Home Entegrasyonu (2 gün)
 **Hedef:** AGH REST API üzerinden DHCP lease, DNS stats, engelleme verileri.
@@ -773,11 +929,13 @@ Adımlar:
 4. Genel durum: AGH version, filtering, query count
 5. Cihaz listesi cache: MAC+IP+hostname (VPN modülü kullanacak)
 6. HTMX: lease tablosu swap, stat kartları poll
+7. **i18n:** Tüm template metinleri `{{ t .Lang "dns.*" }}` ile
 
 Manuel doğrulama:
 - AGH API'den veri geliyor mu
 - Lease CRUD çalışıyor mu
 - DNS stat kartları güncel mi
+- TR/EN dillerinde DNS sayfası metinleri doğru mu
 
 ### Phase 6: Dashboard + SSE Real-Time (3 gün)
 **Hedef:** Ana dashboard, SSE ile real-time metrikler, Canvas grafikleri.
@@ -802,11 +960,13 @@ Adımlar:
 5. Canvas grafik: bandwidth history (son 60 veri noktası, 1s interval)
 6. Responsive layout: CSS Grid, mobile-first
 7. Settings sayfası: hostname, timezone, password değiştir
+8. **i18n:** Dashboard stat etiketleri, birim formatları `{{ t .Lang "dashboard.*" }}` ile
 
 Manuel doğrulama:
 - Dashboard'da real-time metrikler güncelleniyor mu (SSE)
 - Bandwidth grafiği canlı çiziliyor mu
 - Mobil cihazdan responsive görünüyor mu
+- TR/EN dillerinde dashboard metinleri doğru mu
 
 ### Phase 7: SQM/QoS — Bufferbloat Çözümü (3 gün)
 **Hedef:** CAKE qdisc, ingress shaping, BBR/CUBIC, per-device limitleri.
@@ -827,11 +987,13 @@ Adımlar:
 4. Profiller: cake (varsayılan), fq_codel, none
 5. Agent ops: `qos.apply`, `qos.clear`
 6. HTMX: profil seçimi (radio), bandwidth input, apply butonu
+7. **i18n:** QoS profil açıklamaları, etiketler, birimler `{{ t .Lang "qos.*" }}` ile
 
 Manuel doğrulama:
 - `tc -s qdisc show dev ppp0` → CAKE aktif mi
 - Bufferbloat testi (flent rrul veya waveform.com/tools/bufferbloat)
 - BBR/CUBIC geçişi çalışıyor mu
+- TR/EN dillerinde QoS sayfası metinleri doğru mu
 
 ### Phase 8: WireGuard VPN + Policy Routing (5 gün)
 **Hedef:** WireGuard tünelleri, per-device policy routing, drag-and-drop UI.
@@ -862,6 +1024,7 @@ Adımlar:
    - Sol panel: cihaz havuzu, sağ panel: tünel drop zone'ları
    - Drop → `PUT /vpn/assign` → partial swap
 8. Startup restore: `vpn.yaml`'dan tünel + route'ları kur
+9. **i18n:** Tünel isimleri hariç tüm UI metinleri `{{ t .Lang "vpn.*" }}` ile (drag-drop ipuçları, butonlar, durum etiketleri)
 
 Manuel doğrulama:
 - `wg show` → tünel aktif mi, handshake var mı
@@ -892,11 +1055,13 @@ Adımlar:
    - Kodi `.strm` dosyaları oluştur
 4. Zamanlanmış sync: `time.Ticker` goroutine
 5. HTMX: paylaşım listesi, M3U sync butonu, durum göstergesi
+6. **i18n:** Paylaşım form etiketleri, M3U durum mesajları `{{ t .Lang "nas.*" }}` ile
 
 Manuel doğrulama:
 - Samba erişimi: Windows/macOS/Linux'tan bağlanabiliyor mu
 - M3U parse: `.strm` dosyaları doğru klasör yapısında mı
 - Kodi'den medya oynatılabiliyor mu
+- TR/EN dillerinde NAS sayfası metinleri doğru mu
 
 ### Phase 10: Storage + Backup + Hardening (3 gün)
 **Hedef:** RAID izleme, disk sağlığı, config backup, güvenlik sertleştirme.
@@ -923,11 +1088,15 @@ Adımlar:
    - SSH: key-only, LAN-only
    - CSP header, X-Frame-Options, X-Content-Type-Options
 6. HDD spin-up stagger: `hdparm -S`
+7. **i18n:** Storage, settings, backup sayfaları `{{ t .Lang "storage.*" }}` ve `{{ t .Lang "settings.*" }}` ile
+8. **i18n doğrulama:** Tüm locale JSON dosyalarında eksik anahtar testi (build time check)
 
 Manuel doğrulama:
 - RAID durumu doğru gösteriliyor mu
 - Config export → factory reset → import → çalışıyor mu
 - Güvenlik header'ları mevcut mu (`curl -I`)
+- TR/EN dillerinde storage ve settings sayfaları doğru mu
+- **i18n bütünlük:** `tr.json` ve `en.json` aynı anahtarlara sahip mi (eksik anahtar yok)
 
 ---
 
