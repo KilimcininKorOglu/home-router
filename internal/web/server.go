@@ -13,7 +13,9 @@ import (
 	"github.com/KilimcininKorOglu/home-router/internal/agent"
 	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
+	"github.com/KilimcininKorOglu/home-router/internal/services"
 	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
+	"github.com/KilimcininKorOglu/home-router/internal/web/handlers"
 )
 
 type Server struct {
@@ -23,6 +25,7 @@ type Server struct {
 	loc      *i18n.I18n
 	agent    *agent.Client
 	http     *http.Server
+	network  *handlers.NetworkHandler
 }
 
 func NewServer(cfg *config.Config, loc *i18n.I18n, agentClient *agent.Client, webFS fs.FS) (*Server, error) {
@@ -33,11 +36,19 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, agentClient *agent.Client, we
 		return nil, fmt.Errorf("init renderer: %w", err)
 	}
 
+	networkSvc := services.NewNetworkService(cfg)
+	pppoeSvc := services.NewPPPoEService(cfg)
+	usbSvc := services.NewUSBTetheringService(cfg)
+	healthSvc := services.NewHealthCheckService(cfg)
+
+	networkHandler := handlers.NewNetworkHandler(renderer, networkSvc, pppoeSvc, usbSvc, healthSvc)
+
 	s := &Server{
 		cfg:      cfg,
 		auth:     auth,
 		renderer: renderer,
 		loc:      loc,
+		network:  networkHandler,
 		agent:    agentClient,
 	}
 
@@ -117,6 +128,7 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 
 	authed := AuthRequired(s.auth)
 	mux.Handle("GET /{$}", authed(http.HandlerFunc(s.handleDashboard)))
+	mux.Handle("GET /network", authed(http.HandlerFunc(s.network.HandlePage)))
 }
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
