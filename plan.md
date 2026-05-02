@@ -1564,10 +1564,10 @@ Adımlar:
 5. ✅ **i18n paketi:** JSON locale dosyalarını `embed.FS`'den yükle, `T(lang, key)` ve `WithParams(lang, key, params)` fonksiyonları
 6. ✅ **i18n middleware:** request'ten dil tespit et (cookie → Accept-Language → config default), `context.WithValue` ile handler'lara ilet
 7. ✅ **Locale JSON dosyaları:** `tr.json` ve `en.json` — tüm UI anahtarları (nav, dashboard, pppoe, firewall, vpn, qos, nas, storage, settings, common, auth)
-8. Agent server: `net.Listen("unix", socketPath)` + goroutine per connection
-9. JSON-RPC 2.0 protocol: `{"method": "pppoe.connect", "params": {...}, "id": 1}`
-10. Agent client: dial UDS, send request, read response, timeout
-11. Op whitelist: yalnızca kayıtlı method'lar çalışır
+8. ✅ Agent server: `net.Listen("unix", socketPath)` + goroutine per connection
+9. ✅ JSON-RPC 2.0 protocol: `{"method": "pppoe.connect", "params": {...}, "id": 1}`
+10. ✅ Agent client: dial UDS, send request, read response, timeout
+11. ✅ Op whitelist: yalnızca kayıtlı method'lar çalışır
 12. systemd unit dosyaları
 13. **`install.sh` — Tam kapsamlı kurulum scripti:**
     - Root kontrolü + Debian 12 doğrulama
