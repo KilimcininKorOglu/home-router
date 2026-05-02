@@ -230,6 +230,7 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 	mux.Handle("POST /dns/clear-log", authed(http.HandlerFunc(s.dns.HandleClearLog)))
 	mux.Handle("GET /dhcp", authed(http.HandlerFunc(s.dhcp.HandlePage)))
 	mux.Handle("POST /dhcp/static", authed(http.HandlerFunc(s.dhcp.HandleAddStatic)))
+	mux.Handle("DELETE /dhcp/static/{index}", authed(http.HandlerFunc(s.dhcp.HandleDeleteStatic)))
 	mux.Handle("GET /qos", authed(http.HandlerFunc(s.qos.HandlePage)))
 	mux.Handle("POST /qos/apply", authed(http.HandlerFunc(s.qos.HandleApply)))
 	mux.Handle("POST /qos/clear", authed(http.HandlerFunc(s.qos.HandleClear)))

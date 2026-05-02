@@ -3,6 +3,7 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
 	"github.com/KilimcininKorOglu/home-router/internal/services"
@@ -28,7 +29,7 @@ func (h *DHCPHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 		Page: "dhcp",
 		Data: map[string]any{
 			"Leases":       leases,
-			"StaticLeases": h.dhcp.GetDeviceList(),
+			"StaticLeases": h.dhcp.GetStaticLeases(),
 		},
 	}
 
@@ -41,6 +42,26 @@ func (h *DHCPHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 func (h *DHCPHandler) HandleAddStatic(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	h.dhcp.AddStaticLease(r.FormValue("mac"), r.FormValue("ip"), r.FormValue("hostname"))
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/dhcp", http.StatusSeeOther)
+}
+
+func (h *DHCPHandler) HandleDeleteStatic(w http.ResponseWriter, r *http.Request) {
+	idx, err := strconv.Atoi(r.PathValue("index"))
+	if err != nil {
+		http.Error(w, "invalid index", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.dhcp.RemoveStaticLease(idx); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Refresh", "true")

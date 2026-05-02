@@ -116,6 +116,10 @@ func (s *DHCPService) Reload(ctx context.Context) error {
 	return nil
 }
 
+func (s *DHCPService) GetStaticLeases() []config.StaticLease {
+	return s.cfg.DHCP.StaticLeases
+}
+
 func (s *DHCPService) AddStaticLease(mac, ip, hostname string) {
 	s.cfg.DHCP.StaticLeases = append(s.cfg.DHCP.StaticLeases, config.StaticLease{
 		MAC:      mac,
