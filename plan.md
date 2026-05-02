@@ -1770,7 +1770,7 @@ Adımlar:
     - **Telefon algılama:** USB bağlantısı olmadığında interface yok → failover atlanır, sonraki aksiyona geçilir
     - Agent operations: `usb.activate`, `usb.deactivate`, `usb.status`
     - Web UI (network.html içinde section): USB tethering durumu (bağlı/bağlı değil, aktif WAN mı), enable/disable toggle, manuel geçiş butonları
-11. **Health Check (Internet Connectivity Monitor):**
+11. ✅ **Health Check (Internet Connectivity Monitor):**
     - `healthcheck.go` service: goroutine ile periyodik kontrol (ping + HTTP)
     - Her check tanımı: interface, hedef listesi, interval, timeout, failure threshold/window
     - Kontrol mantığı: hedeflerden en az 1 başarılı → OK, hepsi başarısız → failure count++
