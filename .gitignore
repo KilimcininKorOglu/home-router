@@ -1,0 +1,11 @@
+/home-router
+*.exe
+*.test
+*.out
+*.prof
+.env
+.credentials.enc
+*.pem
+*.key
+dist/
+tmp/
