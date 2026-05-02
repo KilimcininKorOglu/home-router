@@ -1898,19 +1898,19 @@ Oluşturulacak dosyalar:
 - `web/templates/partials/lease_table.html`
 
 Adımlar:
-1. **Unbound config template:**
+1. ✅ **Unbound config template:**
    - `server:` — interface, access-control, cache-size, verbosity
    - IPv6 dinleme: `interface: ::0` (dual-stack), `do-ip6: yes`
    - AAAA sorgu desteği: hem IPv4 hem IPv6 upstream'lere sorgulama
    - Recursive mode: `root-hints` dosyası ile
    - Blocklist: `include: /etc/unbound/blocklist.conf` (her satır: `local-zone: "domain" always_refuse`)
    - Opsiyonel DNS-over-TLS upstream: `forward-zone:` → `forward-tls-upstream: yes`
-2. **Blocklist yönetimi:**
+2. ✅ **Blocklist yönetimi:**
    - StevenBlack/hosts formatını indir (`net/http`)
    - Parse: `0.0.0.0 domain` → `local-zone: "domain" always_refuse`
    - Atomic write → `unbound-control reload`
    - Zamanlanmış güncelleme (goroutine ticker)
-3. **dnsmasq config template:**
+3. ✅ **dnsmasq config template:**
    - `port=0` (DNS kapalı, sadece DHCP)
    - `dhcp-range=10.10.10.100,10.10.10.250,12h`
    - `dhcp-option=option:router,10.10.10.1`
@@ -1924,9 +1924,9 @@ Adımlar:
      - RDNSS option: RA ile DNS bilgisi (RFC 8106)
      - ULA prefix aktifse: ULA adresleri de RA ile dağıtılır (global + ULA dual)
      - IPv6 desteği kapalıysa (`ipv6.enabled: off`) bu satırlar config'e eklenmez
-4. **Lease parse:** `/var/lib/misc/dnsmasq.leases` dosyasını oku → `{expiry, mac, ip, hostname}`
-5. **DNS istatistikleri:** `unbound-control stats_noreset` → cache hits, misses, query count
-6. **DNS Query Logging:**
+4. ✅ **Lease parse:** `/var/lib/misc/dnsmasq.leases` dosyasını oku → `{expiry, mac, ip, hostname}`
+5. ✅ **DNS istatistikleri:** `unbound-control stats_noreset` → cache hits, misses, query count
+6. ✅ **DNS Query Logging:**
    - Unbound config: `log-queries: yes`, `verbosity: 2`, `logfile:` → `/var/log/unbound/queries.log`
    - Log formatı: `[timestamp] unbound: info: 10.10.10.15 google.com. A IN` şeklinde satır bazlı
    - Go'da log dosyasını tail-parse eden goroutine:
@@ -1944,9 +1944,9 @@ Adımlar:
    - Web UI tablo: son sorgular (domain, cihaz, tür, durum, zaman), filtreleme (cihaz, domain arama, sadece engellenenler), pagination
    - Web UI: top clients/domains/blocked kartları (HTMX poll ile güncellenen)
    - Performans: büyük log dosyalarında `io.Scanner` ile satır bazlı okuma, tam dosyayı belleğe yükleme yok
-7. **Cihaz listesi:** lease'lerden MAC+IP+hostname (VPN modülü kullanacak)
-8. **Config değişikliği akışı:** Go template render → atomic write → agent `SIGHUP` gönder
-9. **Agent operations:** `dns.reload` (unbound-control reload), `dhcp.reload` (SIGHUP dnsmasq), `dns.querylog.clear` (log dosyasını truncate)
+7. ✅ **Cihaz listesi:** lease'lerden MAC+IP+hostname (VPN modülü kullanacak)
+8. ✅ **Config değişikliği akışı:** Go template render → atomic write → agent `SIGHUP` gönder
+9. ✅ **Agent operations:** `dns.reload` (unbound-control reload), `dhcp.reload` (SIGHUP dnsmasq), `dns.querylog.clear` (log dosyasını truncate)
 10. HTMX: lease tablosu, DNS istatistikleri, blocklist durumu, query log tablosu
 11. **i18n:** Tüm template metinleri `{{ t .Lang "dns.*" }}` ve `{{ t .Lang "dhcp.*" }}` ile
 

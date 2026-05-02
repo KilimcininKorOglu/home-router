@@ -1,0 +1,31 @@
+port=0
+interface={{ .LANDevice }}
+bind-interfaces
+
+dhcp-range={{ .RangeStart }},{{ .RangeEnd }},{{ .LeaseTime }}
+dhcp-option=option:router,{{ .Gateway }}
+dhcp-option=option:dns-server,{{ .DNSServer }}
+dhcp-option=option:ntp-server,{{ .Gateway }}
+
+dhcp-leasefile=/var/lib/misc/dnsmasq.leases
+
+{{- range .StaticLeases }}
+dhcp-host={{ .MAC }},{{ .IP }},{{ .Hostname }}
+{{- end }}
+
+{{- if .IPv6Enabled }}
+enable-ra
+dhcp-range=::,constructor:{{ .LANDevice }},ra-only,64,{{ .LeaseTime }}
+dhcp-option=option6:dns-server,[{{ .Gateway6 }}]
+ra-param={{ .LANDevice }},{{ .RAInterval }},0,0
+{{- if .ULAPrefix }}
+dhcp-range={{ .ULARange }},ra-only,64,{{ .LeaseTime }}
+{{- end }}
+{{- end }}
+
+{{- range .VLANDHCPRanges }}
+interface={{ .Device }}
+dhcp-range={{ .RangeStart }},{{ .RangeEnd }},{{ .LeaseTime }}
+dhcp-option={{ .Device }},option:router,{{ .Gateway }}
+dhcp-option={{ .Device }},option:dns-server,{{ .DNSServer }}
+{{- end }}

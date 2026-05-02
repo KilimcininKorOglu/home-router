@@ -1,0 +1,63 @@
+server:
+    interface: 0.0.0.0
+{{- if .IPv6Enabled }}
+    interface: ::0
+    do-ip6: yes
+{{- else }}
+    do-ip6: no
+{{- end }}
+    do-ip4: yes
+    do-udp: yes
+    do-tcp: yes
+
+    access-control: 127.0.0.0/8 allow
+    access-control: 10.10.10.0/24 allow
+{{- range .AllowSubnets }}
+    access-control: {{ . }} allow
+{{- end }}
+{{- if .IPv6Enabled }}
+    access-control: ::1/128 allow
+    access-control: fe80::/10 allow
+{{- if .ULAPrefix }}
+    access-control: {{ .ULAPrefix }} allow
+{{- end }}
+{{- end }}
+
+    hide-identity: yes
+    hide-version: yes
+    harden-glue: yes
+    harden-dnssec-stripped: yes
+    use-caps-for-id: yes
+
+    cache-min-ttl: 300
+    cache-max-ttl: 86400
+    msg-cache-size: {{ .CacheSize }}m
+    rrset-cache-size: {{ mul .CacheSize 2 }}m
+    key-cache-size: {{ .CacheSize }}m
+
+    prefetch: yes
+    prefetch-key: yes
+    minimal-responses: yes
+
+    num-threads: 2
+    so-reuseport: yes
+
+{{- if .QueryLogEnabled }}
+    log-queries: yes
+    verbosity: 2
+    logfile: "{{ .QueryLogPath }}"
+{{- else }}
+    verbosity: 1
+{{- end }}
+
+    root-hints: "/usr/share/dns/root.hints"
+    auto-trust-anchor-file: "/var/lib/unbound/root.key"
+
+    include: "/etc/unbound/blocklist.conf"
+
+{{- if .EnableDoT }}
+forward-zone:
+    name: "."
+    forward-tls-upstream: yes
+    forward-addr: {{ .DoTUpstream }}
+{{- end }}
