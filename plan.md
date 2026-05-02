@@ -153,7 +153,16 @@ web/locales/
     "auth.login": "Login",
     "auth.password": "Password",
     "auth.wrongPassword": "Invalid password",
-    "auth.logout": "Logout"
+    "auth.logout": "Logout",
+    "tls.title": "TLS Certificate",
+    "tls.mode": "Mode",
+    "tls.selfSigned": "Self-Signed",
+    "tls.mkcert": "mkcert (Local CA)",
+    "tls.acme": "Let's Encrypt",
+    "tls.expires": "Expires",
+    "tls.regenerate": "Regenerate Certificate",
+    "tls.downloadCa": "Download CA Certificate",
+    "tls.issuer": "Issuer"
 }
 ```
 
@@ -378,7 +387,53 @@ LAN cihazı:
 - `ipv6.enabled: auto` → IPv6CP negotiation başarılırsa otomatik etkinleşir
 - Privacy extensions: RA'da önerilir (RFC 4941, temporary addresses)
 
-### 8. Config Yönetimi
+### 8. TLS Sertifika Yönetimi
+
+Web UI her zaman HTTPS üzerinden çalışır. Üç mod desteklenir:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Mode           │ Kullanım                │ Tarayıcı Güveni     │
+├─────────────────┼─────────────────────────┼──────────────────────┤
+│  self-signed    │ Varsayılan, sıfır       │ Uyarı verir,        │
+│                 │ yapılandırma gerekli    │ exception eklenir    │
+├─────────────────┼─────────────────────────┼──────────────────────┤
+│  mkcert         │ LAN geliştirme/ev       │ CA yüklü cihazlarda │
+│                 │ kullanımı               │ tam güven (yeşil)    │
+├─────────────────┼─────────────────────────┼──────────────────────┤
+│  acme           │ Public domain +         │ Tam güven            │
+│                 │ DNS challenge           │ (Let's Encrypt CA)   │
+└─────────────────┴─────────────────────────┴──────────────────────┘
+```
+
+**Self-signed (varsayılan):**
+- İlk başlatmada Go `crypto/x509` + `crypto/ecdsa` (P-256) ile otomatik üretilir
+- SAN: LAN IP + hostname + `*.local` — tarayıcı uyarısı verir ama çalışır
+- 10 yıl geçerlilik, `/var/lib/home-router/tls/` altında saklanır
+- Yenileme: web UI'dan tek tıkla yeni cert üret
+
+**mkcert (LAN kullanımı):**
+- `mkcert` komutu ile lokal CA oluşturulur ve sertifika imzalanır
+- CA sertifikası LAN cihazlarına yüklenirse tarayıcı uyarısı olmaz
+- Web UI: "CA Sertifikası İndir" butonu → cihazlara import
+- Agent op: `tls.mkcert.generate` → `mkcert -install` + `mkcert {hostnames}`
+- System dependency: `mkcert` (Go binary, apt veya direct download)
+
+**Let's Encrypt (ACME):**
+- LAN-only router'da HTTP-01 challenge çalışmaz → DNS-01 challenge zorunlu
+- Desteklenen DNS provider'lar: Cloudflare, Route53, manual (TXT record)
+- Go ACME client: `golang.org/x/crypto/acme/autocert` veya `lego` kütüphanesi
+- Public domain gerekli (ör: `router.example.com`)
+- Otomatik yenileme: cert expire'a 30 gün kala goroutine ile renew
+- DNS API token'ı `.credentials.enc`'de saklanır
+
+**Ortak:**
+- Tüm modlarda HSTS header gönderilmez (LAN-only, IP erişimi bozulur)
+- TLS 1.2+ zorunlu, TLS 1.0/1.1 kapalı
+- Cipher suite: Go'nun varsayılan güvenli seti (ECDHE + AES-GCM)
+- Sertifika değişikliği anında uygulanır (graceful restart)
+
+### 9. Config Yönetimi
 
 ```go
 // YAML config → Go struct (compile-time type safety)
@@ -424,6 +479,7 @@ home-router/
 │   ├── config/
 │   │   ├── config.go             # YAML load/save, struct tanımları
 │   │   ├── crypto.go             # AES-256-GCM encrypt/decrypt
+│   │   ├── tls.go               # TLS sertifika yönetimi (self-signed, ACME, mkcert)
 │   │   ├── defaults.go           # Varsayılan config değerleri
 │   │   └── validate.go           # Config doğrulama
 │   ├── web/
@@ -601,6 +657,27 @@ system:
   sessionSecret: "..."                   # 32-byte hex, cookie signing
   webPort: 8443
   webBind: "10.0.0.1"                   # Sadece LAN
+  tls:
+    mode: "self-signed"                  # self-signed | acme | mkcert
+    certFile: ""                         # Custom sertifika yolu (boş = otomatik)
+    keyFile: ""                          # Custom anahtar yolu (boş = otomatik)
+    selfSigned:
+      cn: "home-router.lan"              # Common Name
+      validDays: 3650                    # Geçerlilik süresi (10 yıl)
+      sans:                              # Subject Alternative Names
+        - "home-router.lan"
+        - "10.0.0.1"
+        - "router.local"
+    acme:                                  # Let's Encrypt (ACME)
+      enabled: false
+      email: ""                          # ACME hesap e-posta
+      domain: ""                         # Public domain (ör: router.example.com)
+      provider: "letsencrypt"            # letsencrypt | letsencrypt-staging
+      dnsChallenge:                      # DNS-01 challenge (LAN-only router için HTTP-01 çalışmaz)
+        provider: ""                     # cloudflare | route53 | manual
+        apiToken: ""                     # .credentials.enc'den
+    mkcert:
+      caInstalled: false                 # mkcert CA'sı cihazlara yüklenmiş mi (bilgilendirme)
 
 interfaces:
   - id: "wan"                            # Sistem içi tanımlayıcı (değiştirilemez)
@@ -1065,6 +1142,10 @@ Go'da HTMX ile iki tür endpoint var: **sayfa** (tam HTML) ve **partial** (HTML 
 | GET    | /settings               | Sayfa   | Sistem ayarları                    |
 | PUT    | /settings/system        | Partial | Hostname, timezone güncelle        |
 | PUT    | /settings/password      | Partial | Şifre değiştir                     |
+| GET    | /partials/tls-status    | Partial | TLS sertifika durumu (mod, expire) |
+| PUT    | /settings/tls           | Partial | TLS modu değiştir + ayarlar        |
+| POST   | /settings/tls/generate  | Partial | Sertifika yeniden oluştur          |
+| GET    | /settings/tls/ca        | Dosya   | mkcert CA sertifikası indir (.crt) |
 | POST   | /system/reboot          | Partial | Sistemi yeniden başlat             |
 | GET    | /partials/logs          | Partial | journalctl çıktısı (paginated)    |
 | POST   | /backup/export          | Dosya   | Config dışa aktar (.tar.gz)       |
@@ -1111,7 +1192,8 @@ apt install -y \
     rsyslog \
     chrony \
     qrencode \                   # WireGuard peer QR kodu üretimi
-    wide-dhcpv6-client            # DHCPv6-PD prefix delegation client
+    wide-dhcpv6-client \           # DHCPv6-PD prefix delegation client
+    mkcert                        # Lokal CA + güvenilir sertifika (opsiyonel TLS modu)
 
 # dnsmasq: DNS kapalı (port=0), sadece DHCP
 # unbound: recursive DNS resolver + blocklist
@@ -1240,6 +1322,7 @@ Oluşturulacak dosyalar:
 - `internal/agent/operations.go` — Op whitelist registry
 - `internal/config/config.go` — YAML config struct + load/save
 - `internal/config/crypto.go` — AES-256-GCM encrypt/decrypt
+- `internal/config/tls.go` — TLS sertifika yönetimi (self-signed, ACME, mkcert)
 - `internal/config/defaults.go` — Varsayılan config
 - `internal/config/validate.go` — Config doğrulama
 - `internal/i18n/i18n.go` — Locale yükleme, T(), WithParams()
@@ -1309,7 +1392,24 @@ Adımlar:
 5. **Dil değiştirme handler:** `POST /settings/lang` → `lang` cookie set → `HX-Refresh: true`
 6. **`<html lang="{{ .Lang }}">` attribute'u** base layout'ta dinamik
 7. `go:embed` ile tüm static + template + locale dosyalarını binary'ye göm
-8. Session: `gorilla/sessions` ile cookie-based (encrypted, httpOnly, secure, sameSite)
+8. **TLS sertifika yönetimi:**
+   - `config/tls.go`: TLS modu okuma (self-signed | mkcert | acme)
+   - **Self-signed (varsayılan):** ilk başlatmada Go `crypto/ecdsa` (P-256) + `crypto/x509` ile otomatik cert üret
+     - SAN: config'deki hostname + LAN IP + `*.local`
+     - Sertifika: `/var/lib/home-router/tls/server.crt` + `server.key`
+     - Geçerlilik: config'den (`selfSigned.validDays`, varsayılan 3650)
+   - **mkcert:** `exec.Command("mkcert")` ile sertifika oluştur
+     - `mkcert -cert-file {crt} -key-file {key} {hostnames...}`
+     - CA sertifikası: `mkcert -CAROOT` → CA dosya yolunu oku → web UI'dan indirilebilir
+     - Agent op: `tls.mkcert.generate`, `tls.mkcert.ca_path`
+   - **ACME (Let's Encrypt):** `golang.org/x/crypto/acme/autocert` veya `lego`
+     - DNS-01 challenge: LAN-only router'da HTTP-01 çalışmaz
+     - DNS API token `.credentials.enc`'den çözülür
+     - Otomatik yenileme: expire'a 30 gün kala goroutine ile renew
+     - Yenileme sonrası `tls.Config.GetCertificate` callback ile sıfır-downtime geçiş
+   - `http.Server.TLSConfig`: TLS 1.2+ zorunlu, HSTS yok (LAN IP erişimi bozar)
+   - Web UI settings sayfasında: mod seçimi, sertifika durumu (expire tarihi, issuer), yeniden üretme butonu
+9. Session: `gorilla/sessions` ile cookie-based (encrypted, httpOnly, secure, sameSite)
 9. bcrypt ile password verify
 10. Rate limiting: token bucket (stdlib `time.Ticker` + `sync.Map`)
 11. CSRF: double-submit cookie (custom header `X-CSRF-Token`)
@@ -1319,7 +1419,11 @@ Adımlar:
 15. **Tüm template'lerde sabit metin yok** — her label, buton, başlık `{{ t }}` fonksiyonu ile
 
 Manuel doğrulama:
+- **TLS self-signed:** ilk başlatmada sertifika otomatik üretildi mi (`/var/lib/home-router/tls/`)
 - `curl -k https://10.0.0.1:8443/login` → login sayfası dönüyor mu
+- **TLS protokol:** `openssl s_client -connect 10.0.0.1:8443` → TLS 1.2+ kullanılıyor mu
+- **mkcert:** mod değiştir → mkcert ile sertifika üret → CA indir → tarayıcıda uyarı yok mu
+- **TLS settings:** sertifika durumu (expire tarihi, mod) doğru gösteriliyor mu
 - Yanlış şifre → login sayfasında hata mesajı (HTMX swap), dile uygun mesaj
 - Doğru şifre → dashboard'a redirect
 - WAN IP'den erişim → 403
@@ -2025,6 +2129,9 @@ firewallSvc.Apply(rules)
 | DHCPv6-PD prefix değişimi (PPPoE)    | PPPoE reconnect sonrası yeni prefix → LAN'a RA ile dağıtım, geçiş süresi ~30s    |
 | ICMPv6 engellenmesi → IPv6 çalışmaz | RFC 4890 zorunlu allowlist (NDP, MLD, error messages) — asla drop edilmez          |
 | IPv6 privacy extension tracking      | RA'da privacy extension önerisi (RFC 4941), temporary addresses                    |
+| Self-signed cert tarayıcı uyarısı   | mkcert modu ile LAN'da güvenilir CA, ACME ile public domain desteği                |
+| ACME DNS challenge API key sızması   | Token `.credentials.enc`'de AES-256-GCM, agent op whitelist                        |
+| Let's Encrypt rate limit (5/hafta)  | Staging ortamı ile test, production'da dikkatli kullanım                            |
 
 ## Tahmini Toplam Süre
 
