@@ -1698,7 +1698,7 @@ Oluşturulacak dosyalar:
 - `web/templates/partials/healthcheck.html` — Health check durum kartları + config
 
 Adımlar:
-1. **Interface algılama ve yönetimi:**
+1. ✅ **Interface algılama ve yönetimi:**
    - `/sys/class/net/` tarayarak tüm fiziksel NIC'leri algıla (virtual, loopback hariç)
    - Her NIC için: device name, MAC, link state (up/down), speed, driver
    - İlk çalıştırmada algılanan NIC'leri `interfaces` config'e varsayılan değerlerle ekle
