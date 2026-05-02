@@ -167,7 +167,22 @@ type FirewallConfig struct {
 	DefaultPolicy string            `yaml:"defaultPolicy"`
 	TTLFix        TTLFixConfig      `yaml:"ttlFix"`
 	PortForwards  []PortForward     `yaml:"portForwards"`
+	Rules         []FirewallRule    `yaml:"rules"`
 	RateLimits    map[string]string `yaml:"rateLimits"`
+}
+
+type FirewallRule struct {
+	Name      string `yaml:"name"`
+	Chain     string `yaml:"chain"`
+	Action    string `yaml:"action"`
+	SrcIP     string `yaml:"srcIP"`
+	DstIP     string `yaml:"dstIP"`
+	Protocol  string `yaml:"protocol"`
+	Port      int    `yaml:"port"`
+	Interface string `yaml:"interface"`
+	Direction string `yaml:"direction"`
+	Enabled   bool   `yaml:"enabled"`
+	Priority  int    `yaml:"priority"`
 }
 
 type TTLFixConfig struct {

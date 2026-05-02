@@ -145,6 +145,90 @@ func (s *FirewallService) RemovePortForward(index int) error {
 	return nil
 }
 
+func (s *FirewallService) AddRule(rule config.FirewallRule) {
+	if rule.Priority == 0 {
+		maxPrio := 0
+		for _, r := range s.cfg.Firewall.Rules {
+			if r.Priority > maxPrio {
+				maxPrio = r.Priority
+			}
+		}
+		rule.Priority = maxPrio + 10
+	}
+	s.cfg.Firewall.Rules = append(s.cfg.Firewall.Rules, rule)
+}
+
+func (s *FirewallService) RemoveRule(index int) error {
+	if index < 0 || index >= len(s.cfg.Firewall.Rules) {
+		return fmt.Errorf("invalid rule index: %d", index)
+	}
+	s.cfg.Firewall.Rules = append(
+		s.cfg.Firewall.Rules[:index],
+		s.cfg.Firewall.Rules[index+1:]...,
+	)
+	return nil
+}
+
+func (s *FirewallService) ToggleRule(index int, enabled bool) error {
+	if index < 0 || index >= len(s.cfg.Firewall.Rules) {
+		return fmt.Errorf("invalid rule index: %d", index)
+	}
+	s.cfg.Firewall.Rules[index].Enabled = enabled
+	return nil
+}
+
+func (s *FirewallService) GetCustomRules() []config.FirewallRule {
+	return s.cfg.Firewall.Rules
+}
+
+func (s *FirewallService) GenerateCustomNftRules() string {
+	var sb strings.Builder
+
+	for _, r := range s.cfg.Firewall.Rules {
+		if !r.Enabled {
+			continue
+		}
+
+		chain := r.Chain
+		if chain == "" {
+			chain = "input"
+		}
+
+		var conditions []string
+
+		if r.Interface != "" {
+			if r.Direction == "in" {
+				conditions = append(conditions, fmt.Sprintf("iifname \"%s\"", r.Interface))
+			} else {
+				conditions = append(conditions, fmt.Sprintf("oifname \"%s\"", r.Interface))
+			}
+		}
+		if r.SrcIP != "" {
+			conditions = append(conditions, fmt.Sprintf("ip saddr %s", r.SrcIP))
+		}
+		if r.DstIP != "" {
+			conditions = append(conditions, fmt.Sprintf("ip daddr %s", r.DstIP))
+		}
+		if r.Protocol != "" && r.Port > 0 {
+			conditions = append(conditions, fmt.Sprintf("%s dport %d", r.Protocol, r.Port))
+		} else if r.Protocol != "" {
+			conditions = append(conditions, fmt.Sprintf("meta l4proto %s", r.Protocol))
+		}
+
+		action := r.Action
+		if action == "" {
+			action = "accept"
+		}
+
+		if len(conditions) > 0 {
+			fmt.Fprintf(&sb, "        %s %s # %s\n",
+				strings.Join(conditions, " "), action, r.Name)
+		}
+	}
+
+	return sb.String()
+}
+
 func (s *FirewallService) HasPendingChange() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

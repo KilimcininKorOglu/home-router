@@ -97,6 +97,103 @@
         {{ end }}
     </div>
 
+    <!-- Custom Rules -->
+    <div class="card" style="margin-bottom: var(--space-lg);">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "firewall.customRules" }}</span>
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('rule-form').style.display='block'">
+                {{ t $.Lang "firewall.addRule" }}
+            </button>
+        </div>
+
+        <!-- Add Rule Form -->
+        <form id="rule-form" style="display:none; margin-bottom:var(--space-lg); padding:var(--space-md); border:1px solid var(--border-color); border-radius:var(--radius-md);"
+              hx-post="/firewall/rules" hx-swap="none"
+              hx-on::after-request="this.reset(); this.style.display='none';">
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:var(--space-md);">
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "common.name" }}</label>
+                    <input class="input" name="name" required>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "firewall.chain" }}</label>
+                    <select class="input" name="chain">
+                        <option value="input">{{ t $.Lang "firewall.input" }}</option>
+                        <option value="forward">{{ t $.Lang "firewall.forward" }}</option>
+                        <option value="output">{{ t $.Lang "firewall.output" }}</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "firewall.action" }}</label>
+                    <select class="input" name="action">
+                        <option value="accept">{{ t $.Lang "firewall.accept" }}</option>
+                        <option value="drop">{{ t $.Lang "firewall.drop" }}</option>
+                        <option value="reject">{{ t $.Lang "firewall.reject" }}</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "firewall.srcIP" }}</label>
+                    <input class="input" name="srcIP" placeholder="0.0.0.0/0">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "firewall.dstIP" }}</label>
+                    <input class="input" name="dstIP" placeholder="0.0.0.0/0">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "firewall.protocol" }}</label>
+                    <select class="input" name="protocol">
+                        <option value="">{{ t $.Lang "common.status" }}</option>
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                        <option value="icmp">ICMP</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "firewall.port" }}</label>
+                    <input class="input" name="port" type="number" min="0" max="65535">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "firewall.interface" }}</label>
+                    <input class="input" name="interface" placeholder="ppp0">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "firewall.direction" }}</label>
+                    <select class="input" name="direction">
+                        <option value="in">{{ t $.Lang "firewall.input" }}</option>
+                        <option value="out">{{ t $.Lang "firewall.output" }}</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top:var(--space-md); display:flex; gap:var(--space-sm);">
+                <button type="submit" class="btn btn-primary btn-sm">{{ t $.Lang "common.save" }}</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="this.closest('form').style.display='none'">{{ t $.Lang "common.cancel" }}</button>
+            </div>
+        </form>
+
+        <!-- Rule List -->
+        {{ range $idx, $rule := .Rules }}
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:var(--space-sm) 0; border-bottom:1px solid var(--border-color);">
+            <div>
+                <span style="font-weight:700;">{{ $rule.Name }}</span>
+                <span style="color:var(--text-secondary); font-size:var(--font-xs); margin-left:var(--space-sm);">
+                    {{ $rule.Chain }} | {{ if $rule.SrcIP }}{{ $rule.SrcIP }}{{ end }}{{ if $rule.DstIP }} → {{ $rule.DstIP }}{{ end }}{{ if $rule.Protocol }} {{ $rule.Protocol }}{{ end }}{{ if $rule.Port }}:{{ $rule.Port }}{{ end }} → {{ $rule.Action }}
+                </span>
+            </div>
+            <div style="display:flex; gap:var(--space-sm);">
+                {{ if $rule.Enabled }}
+                    <span class="badge badge-success">{{ t $.Lang "common.enabled" }}</span>
+                    <button class="btn btn-secondary btn-sm" hx-post="/firewall/rules/{{ $idx }}/toggle" hx-vals='{"enabled":"false"}' hx-swap="none">{{ t $.Lang "common.disabled" }}</button>
+                {{ else }}
+                    <span class="badge badge-error">{{ t $.Lang "common.disabled" }}</span>
+                    <button class="btn btn-secondary btn-sm" hx-post="/firewall/rules/{{ $idx }}/toggle" hx-vals='{"enabled":"true"}' hx-swap="none">{{ t $.Lang "common.enabled" }}</button>
+                {{ end }}
+                <button class="btn btn-danger btn-sm" hx-delete="/firewall/rules/{{ $idx }}" hx-swap="none"
+                        hx-confirm="{{ t $.Lang "common.confirm" }}">{{ t $.Lang "common.delete" }}</button>
+            </div>
+        </div>
+        {{ end }}
+    </div>
+
     <!-- Apply Button -->
     <button class="btn btn-primary btn-lg btn-block"
             hx-post="/firewall/apply" hx-swap="none">

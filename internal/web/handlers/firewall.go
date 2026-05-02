@@ -33,6 +33,7 @@ func (h *FirewallHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 		Page: "firewall",
 		Data: map[string]any{
 			"PortForwards":  h.cfg.Firewall.PortForwards,
+			"Rules":         h.firewall.GetCustomRules(),
 			"TTLFixEnabled": h.cfg.Firewall.TTLFix.Enabled,
 			"TTLFixValue":   h.cfg.Firewall.TTLFix.Value,
 			"PendingChange": h.firewall.HasPendingChange(),
@@ -121,6 +122,67 @@ func (h *FirewallHandler) HandleDeletePortForward(w http.ResponseWriter, r *http
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Trigger", "portForwardDeleted")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/firewall", http.StatusSeeOther)
+}
+
+func (h *FirewallHandler) HandleAddRule(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+
+	port, _ := strconv.Atoi(r.FormValue("port"))
+
+	rule := config.FirewallRule{
+		Name:      r.FormValue("name"),
+		Chain:     r.FormValue("chain"),
+		Action:    r.FormValue("action"),
+		SrcIP:     r.FormValue("srcIP"),
+		DstIP:     r.FormValue("dstIP"),
+		Protocol:  r.FormValue("protocol"),
+		Port:      port,
+		Interface: r.FormValue("interface"),
+		Direction: r.FormValue("direction"),
+		Enabled:   true,
+	}
+
+	h.firewall.AddRule(rule)
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/firewall", http.StatusSeeOther)
+}
+
+func (h *FirewallHandler) HandleDeleteRule(w http.ResponseWriter, r *http.Request) {
+	idx, _ := strconv.Atoi(r.PathValue("index"))
+
+	if err := h.firewall.RemoveRule(idx); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/firewall", http.StatusSeeOther)
+}
+
+func (h *FirewallHandler) HandleToggleRule(w http.ResponseWriter, r *http.Request) {
+	idx, _ := strconv.Atoi(r.PathValue("index"))
+	enabled := r.FormValue("enabled") == "true"
+
+	if err := h.firewall.ToggleRule(idx, enabled); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
