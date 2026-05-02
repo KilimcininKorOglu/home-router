@@ -26,7 +26,7 @@ Turkcell Superonline'ın ISP modemleri bufferbloat sorununa neden oluyor ve 1 Gb
 ## Current State
 
 - Proje dizini boş — sıfırdan (greenfield) geliştirme
-- Donanım hazır: 2x Gigabit NIC, RAID-1 depolama, Ubuntu 24.04
+- Donanım hazır: 2x Gigabit NIC, RAID-1 depolama, Debian 12 Bookworm (minimal)
 
 ## What We're NOT Doing
 
