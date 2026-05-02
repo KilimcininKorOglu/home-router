@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+BUILD_DIR="/tmp/home-router-iso-build"
+OUTPUT_ISO="$PROJECT_ROOT/home-router-installer.iso"
+
+DEBIAN_ISO="${1:-}"
+BINARY_PATH="${2:-$PROJECT_ROOT/home-router}"
+
+if [[ -z "$DEBIAN_ISO" ]]; then
+    echo "Usage: $0 <debian-netinst.iso> [home-router-binary]"
+    echo ""
+    echo "Example:"
+    echo "  make cross"
+    echo "  $0 debian-12.8.0-amd64-netinst.iso ./home-router"
+    exit 1
+fi
+
+if [[ ! -f "$DEBIAN_ISO" ]]; then
+    echo "ERROR: Debian ISO not found: $DEBIAN_ISO"
+    exit 1
+fi
+
+if [[ ! -f "$BINARY_PATH" ]]; then
+    echo "ERROR: Binary not found: $BINARY_PATH"
+    echo "Run 'make cross' first to build the Linux amd64 binary."
+    exit 1
+fi
+
+for cmd in xorriso; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "ERROR: $cmd is required. Install with: apt install $cmd"
+        exit 1
+    fi
+done
+
+echo "=== Building Home Router Installer ISO ==="
+echo "  Debian ISO: $DEBIAN_ISO"
+echo "  Binary:     $BINARY_PATH"
+echo "  Output:     $OUTPUT_ISO"
+echo ""
+
+rm -rf "$BUILD_DIR"
+mkdir -p "$BUILD_DIR"
+
+echo "[1/5] Extracting Debian ISO..."
+xorriso -osirrox on -indev "$DEBIAN_ISO" -extract / "$BUILD_DIR/iso" 2>/dev/null
+
+echo "[2/5] Adding home-router files..."
+cp "$BINARY_PATH" "$BUILD_DIR/iso/home-router"
+cp "$SCRIPT_DIR/preseed.cfg" "$BUILD_DIR/iso/"
+cp "$SCRIPT_DIR/post-install.sh" "$BUILD_DIR/iso/"
+
+mkdir -p "$BUILD_DIR/iso/configs/defaults"
+cp "$PROJECT_ROOT/configs/defaults"/*.yaml "$BUILD_DIR/iso/configs/defaults/" 2>/dev/null || true
+
+echo "[3/5] Updating GRUB config..."
+if [[ -f "$BUILD_DIR/iso/boot/grub/grub.cfg" ]]; then
+    cp "$BUILD_DIR/iso/boot/grub/grub.cfg" "$BUILD_DIR/iso/boot/grub/grub.cfg.orig"
+fi
+cp "$SCRIPT_DIR/grub.cfg" "$BUILD_DIR/iso/boot/grub/grub.cfg"
+
+echo "[4/5] Updating isolinux config..."
+if [[ -f "$BUILD_DIR/iso/isolinux/txt.cfg" ]]; then
+    sed -i 's|append |append auto=true preseed/file=/cdrom/preseed.cfg |' "$BUILD_DIR/iso/isolinux/txt.cfg"
+fi
+
+echo "[5/5] Building ISO..."
+xorriso -as mkisofs \
+    -r -V "HomeRouter" \
+    -o "$OUTPUT_ISO" \
+    -J -joliet-long \
+    -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
+    -partition_offset 16 \
+    -b isolinux/isolinux.bin \
+    -c isolinux/boot.cat \
+    -no-emul-boot -boot-load-size 4 -boot-info-table \
+    -eltorito-alt-boot \
+    -e boot/grub/efi.img \
+    -no-emul-boot -isohybrid-gpt-basdat \
+    "$BUILD_DIR/iso" 2>/dev/null
+
+rm -rf "$BUILD_DIR"
+
+echo ""
+echo "=== ISO build complete ==="
+echo "  Output: $OUTPUT_ISO"
+echo "  Size:   $(du -h "$OUTPUT_ISO" | cut -f1)"
+echo ""
+echo "Write to USB: dd if=$OUTPUT_ISO of=/dev/sdX bs=4M status=progress"

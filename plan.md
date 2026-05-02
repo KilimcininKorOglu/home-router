@@ -2381,7 +2381,7 @@ Adımlar:
    - İlk boot'ta web UI setup wizard için flag oluştur (`/var/lib/home-router/.first-boot`)
    - GRUB: RAID-1 aware, degraded boot allowed
 
-4. **ISO build scripti (`build-iso.sh`):**
+4. ✅ **ISO build scripti (`build-iso.sh`):**
    - Girdi: resmi Debian 12 netinst ISO + Go binary (cross-compile edilmiş)
    - Çıktı: `home-router-installer.iso` (custom preseed + binary gömülü)
    - İşlem:
