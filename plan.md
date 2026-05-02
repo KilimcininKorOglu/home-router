@@ -2154,7 +2154,7 @@ Adımlar:
      - QR kodu: config string → qrencode → mobil OpenVPN app
    - nftables: `iif tun0 oif {lan_iface} accept`, masquerade
    - Agent operations: `openvpn.server.start`, `openvpn.server.stop`, `openvpn.server.reload`
-5. **PBR motoru — kural eşleştirme:**
+5. ✅ **PBR motoru — kural eşleştirme:**
    - `routing.yaml`'dan politika kurallarını yükle
    - Her politikayı nftables kuralına çevir:
      - Kaynak eşleştirme: `ip saddr {device_ip}` veya `ether saddr {mac}`
@@ -2164,17 +2164,17 @@ Adımlar:
    - fwmark atama: `meta mark set {fwmark}`
    - `ip rule add fwmark {mark} lookup {table_id} priority {prio}`
    - `ct mark` ile reply paketlerde fwmark korunması
-4. **Domain-based routing:**
+4. ✅ **Domain-based routing:**
    - Politikadaki domain listesi → Unbound'a `local-zone` + `local-data` hook
    - DNS yanıtından çözümlenen IP'leri yakala (unbound-control dump_cache parse)
    - nftables named set: `nft add element inet filter pbr_{policy_name} { resolved_ip }`
    - Kural: `ip daddr @pbr_{policy_name} meta mark set {fwmark}`
    - Goroutine: TTL bazlı set temizleme + yeni sorgu ile refresh
-5. **nftables PBR chain:**
+5. ✅ **nftables PBR chain:**
    - `chain pbr_policies` — priority sırasıyla kural zinciri
    - Firewall template güncelleme: PBR chain'i forward chain'e entegre
-8. **Kill switch:** VPN client tünel down (WG veya OVPN) → ilgili politikadaki cihazların trafiğini engelle
-9. **Startup restore:** `routing.yaml` + `vpn.yaml` + `openvpn` config'den tüm tünel + server + politika kurallarını kur
+8. ✅ **Kill switch:** VPN client tünel down (WG veya OVPN) → ilgili politikadaki cihazların trafiğini engelle
+9. ✅ **Startup restore:** `routing.yaml` + `vpn.yaml` + `openvpn` config'den tüm tünel + server + politika kurallarını kur
 10. **Web UI — WireGuard sayfası (HTMX):**
     - İki tab/section: **WG Client Tünelleri** + **WG Server**
     - Client: tünel listesi (durum, handshake, transfer), CRUD formu
