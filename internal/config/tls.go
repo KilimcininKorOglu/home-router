@@ -137,20 +137,7 @@ func generateSelfSigned(cfg *TLSConfig, certPath, keyPath string) (*TLSCertInfo,
 	}
 	os.Chmod(keyPath, 0o600)
 
-	sans := make([]string, 0, len(template.DNSNames)+len(template.IPAddresses))
-	sans = append(sans, template.DNSNames...)
-	for _, ip := range template.IPAddresses {
-		sans = append(sans, ip.String())
-	}
-
-	return &TLSCertInfo{
-		CertPath:  certPath,
-		KeyPath:   keyPath,
-		NotBefore: notBefore,
-		NotAfter:  notAfter,
-		Issuer:    "Self-Signed",
-		SANs:      sans,
-	}, nil
+	return readCertInfo(certPath, keyPath)
 }
 
 func readCertInfo(certPath, keyPath string) (*TLSCertInfo, error) {

@@ -12,6 +12,8 @@ import (
 	"github.com/KilimcininKorOglu/home-router/internal/agent"
 	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
+	"github.com/KilimcininKorOglu/home-router/internal/web"
+	webFS "github.com/KilimcininKorOglu/home-router/web"
 )
 
 func runServe() error {
@@ -32,18 +34,22 @@ func runServe() error {
 		return fmt.Errorf("failed to init i18n: %w", err)
 	}
 
+	if err := loc.LoadFromFS(webFS.EmbeddedFS, "locales"); err != nil {
+		return fmt.Errorf("failed to load locales: %w", err)
+	}
+
 	agentClient := agent.NewClient(*socketPath)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	srv, err := web.NewServer(cfg, loc, agentClient, webFS.EmbeddedFS)
+	if err != nil {
+		return fmt.Errorf("failed to create web server: %w", err)
+	}
+
 	log.Printf("home-router serve starting (bind=%s:%d, lang=%s)",
 		cfg.System.WebBind, cfg.System.WebPort, loc.Fallback())
 
-	_ = agentClient
-	_ = ctx
-
-	<-ctx.Done()
-	log.Println("serve shutting down...")
-	return nil
+	return srv.Serve(ctx)
 }
