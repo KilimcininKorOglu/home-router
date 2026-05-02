@@ -130,6 +130,33 @@ func (s *FirewallService) GetRules(ctx context.Context) (string, error) {
 	return netutil.RunSimple(ctx, "nft", "list", "ruleset")
 }
 
+func (s *FirewallService) AddOpenPort(op config.OpenPort) {
+	s.cfg.Firewall.OpenPorts = append(s.cfg.Firewall.OpenPorts, op)
+}
+
+func (s *FirewallService) RemoveOpenPort(index int) error {
+	if index < 0 || index >= len(s.cfg.Firewall.OpenPorts) {
+		return fmt.Errorf("invalid open port index: %d", index)
+	}
+	s.cfg.Firewall.OpenPorts = append(
+		s.cfg.Firewall.OpenPorts[:index],
+		s.cfg.Firewall.OpenPorts[index+1:]...,
+	)
+	return nil
+}
+
+func (s *FirewallService) ToggleOpenPort(index int, enabled bool) error {
+	if index < 0 || index >= len(s.cfg.Firewall.OpenPorts) {
+		return fmt.Errorf("invalid open port index: %d", index)
+	}
+	s.cfg.Firewall.OpenPorts[index].Enabled = enabled
+	return nil
+}
+
+func (s *FirewallService) GetOpenPorts() []config.OpenPort {
+	return s.cfg.Firewall.OpenPorts
+}
+
 func (s *FirewallService) AddPortForward(pf config.PortForward) {
 	s.cfg.Firewall.PortForwards = append(s.cfg.Firewall.PortForwards, pf)
 }

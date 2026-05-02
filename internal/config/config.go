@@ -166,9 +166,18 @@ type USBTetherConfig struct {
 type FirewallConfig struct {
 	DefaultPolicy string            `yaml:"defaultPolicy"`
 	TTLFix        TTLFixConfig      `yaml:"ttlFix"`
+	OpenPorts     []OpenPort        `yaml:"openPorts"`
 	PortForwards  []PortForward     `yaml:"portForwards"`
 	Rules         []FirewallRule    `yaml:"rules"`
 	RateLimits    map[string]string `yaml:"rateLimits"`
+}
+
+type OpenPort struct {
+	Name     string `yaml:"name"`
+	Protocol string `yaml:"protocol"`
+	Port     int    `yaml:"port"`
+	Source   string `yaml:"source"`
+	Enabled  bool   `yaml:"enabled"`
 }
 
 type FirewallRule struct {

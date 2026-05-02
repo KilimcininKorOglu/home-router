@@ -35,6 +35,71 @@
         </p>
     </div>
 
+    <!-- Open Ports (WAN Input) -->
+    <div class="card" style="margin-bottom: var(--space-lg);">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "firewall.openPorts" }}</span>
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('openport-form').style.display='block'">
+                {{ t $.Lang "firewall.addOpenPort" }}
+            </button>
+        </div>
+        <p style="color:var(--text-secondary); font-size:var(--font-sm); margin-bottom:var(--space-md);">
+            {{ t $.Lang "firewall.openPorts.desc" }}
+        </p>
+
+        <form id="openport-form" style="display:none; padding:var(--space-md); border:1px solid var(--border-color); border-radius:var(--radius-md); margin-bottom:var(--space-md);"
+              hx-post="/firewall/open-ports" hx-swap="none"
+              hx-on::after-request="this.reset(); this.style.display='none';">
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:var(--space-md);">
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "common.name" }}</label>
+                    <input class="input" name="name" placeholder="SSH" required>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "firewall.protocol" }}</label>
+                    <select class="input" name="protocol">
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "firewall.port" }}</label>
+                    <input class="input" name="port" type="number" min="1" max="65535" required>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "firewall.source" }}</label>
+                    <input class="input" name="source" placeholder="0.0.0.0/0" value="0.0.0.0/0">
+                </div>
+            </div>
+            <div style="margin-top:var(--space-md); display:flex; gap:var(--space-sm);">
+                <button type="submit" class="btn btn-primary btn-sm">{{ t $.Lang "common.save" }}</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="this.closest('form').style.display='none'">{{ t $.Lang "common.cancel" }}</button>
+            </div>
+        </form>
+
+        {{ range $idx, $op := .OpenPorts }}
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:var(--space-sm) 0; border-bottom:1px solid var(--border-color);">
+            <div>
+                <span style="font-weight:700;">{{ $op.Name }}</span>
+                <span style="color:var(--text-secondary); font-size:var(--font-xs); margin-left:var(--space-sm);">
+                    {{ $op.Protocol }} :{{ $op.Port }}{{ if $op.Source }} ({{ $op.Source }}){{ end }}
+                </span>
+            </div>
+            <div style="display:flex; gap:var(--space-sm);">
+                {{ if $op.Enabled }}
+                    <span class="badge badge-success">{{ t $.Lang "common.enabled" }}</span>
+                    <button class="btn btn-secondary btn-sm" hx-post="/firewall/open-ports/{{ $idx }}/toggle" hx-vals='{"enabled":"false"}' hx-swap="none">{{ t $.Lang "common.disabled" }}</button>
+                {{ else }}
+                    <span class="badge badge-error">{{ t $.Lang "common.disabled" }}</span>
+                    <button class="btn btn-secondary btn-sm" hx-post="/firewall/open-ports/{{ $idx }}/toggle" hx-vals='{"enabled":"true"}' hx-swap="none">{{ t $.Lang "common.enabled" }}</button>
+                {{ end }}
+                <button class="btn btn-danger btn-sm" hx-delete="/firewall/open-ports/{{ $idx }}" hx-swap="none"
+                        hx-confirm="{{ t $.Lang "common.confirm" }}">{{ t $.Lang "common.delete" }}</button>
+            </div>
+        </div>
+        {{ end }}
+    </div>
+
     <!-- Port Forwards -->
     <div class="card" style="margin-bottom: var(--space-lg);">
         <div class="card-header">

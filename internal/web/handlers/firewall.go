@@ -32,6 +32,7 @@ func (h *FirewallHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 		Lang: lang,
 		Page: "firewall",
 		Data: map[string]any{
+			"OpenPorts":     h.firewall.GetOpenPorts(),
 			"PortForwards":  h.cfg.Firewall.PortForwards,
 			"Rules":         h.firewall.GetCustomRules(),
 			"TTLFixEnabled": h.cfg.Firewall.TTLFix.Enabled,
@@ -177,6 +178,61 @@ func (h *FirewallHandler) HandleToggleRule(w http.ResponseWriter, r *http.Reques
 	enabled := r.FormValue("enabled") == "true"
 
 	if err := h.firewall.ToggleRule(idx, enabled); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/firewall", http.StatusSeeOther)
+}
+
+func (h *FirewallHandler) HandleAddOpenPort(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	port, _ := strconv.Atoi(r.FormValue("port"))
+
+	op := config.OpenPort{
+		Name:     r.FormValue("name"),
+		Protocol: r.FormValue("protocol"),
+		Port:     port,
+		Source:   r.FormValue("source"),
+		Enabled:  true,
+	}
+
+	h.firewall.AddOpenPort(op)
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/firewall", http.StatusSeeOther)
+}
+
+func (h *FirewallHandler) HandleDeleteOpenPort(w http.ResponseWriter, r *http.Request) {
+	idx, _ := strconv.Atoi(r.PathValue("index"))
+
+	if err := h.firewall.RemoveOpenPort(idx); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/firewall", http.StatusSeeOther)
+}
+
+func (h *FirewallHandler) HandleToggleOpenPort(w http.ResponseWriter, r *http.Request) {
+	idx, _ := strconv.Atoi(r.PathValue("index"))
+	enabled := r.FormValue("enabled") == "true"
+
+	if err := h.firewall.ToggleOpenPort(idx, enabled); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
