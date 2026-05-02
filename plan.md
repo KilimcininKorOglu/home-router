@@ -1705,7 +1705,7 @@ Adımlar:
    - Web UI: algılanan interface listesi → her biri için label, role (wan/lan/unused), MTU düzenlenebilir
    - Label her yerde kullanılır: dashboard, firewall, QoS, PBR — ham device name yerine
    - Role değişikliği: uyarı + onay (WAN/LAN rolü değiştirmek ağ kesintisi yapar)
-2. **802.1Q VLAN yönetimi:**
+2. ✅ **802.1Q VLAN yönetimi:**
    - VLAN oluşturma: `ip link add link {parent_device} name {parent}.{vid} type vlan id {vid}`
    - VLAN silme: `ip link delete {parent}.{vid}`
    - VLAN IP atama: `ip addr add {address} dev {parent}.{vid}` (static) veya DHCP client
