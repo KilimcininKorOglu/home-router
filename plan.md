@@ -6,8 +6,8 @@ Turkcell Superonline'ın ISP modemleri bufferbloat sorununa neden oluyor ve 1 Gb
 
 ## Kurallar
 
-1. **Her deği��iklikte commit atılır.** Fonksiyonel bir birim tamamlandığında hemen commit.
-2. **Asla yama yapılmaz.** Sorunun kök nedeni bulunur ve oradan çöz��lür.
+1. **Her değişiklikte commit atılır.** Fonksiyonel bir birim tamamlandığında hemen commit.
+2. **Asla yama yapılmaz.** Sorunun kök nedeni bulunur ve oradan çözülür.
 3. **Çoklu dil desteği (i18n) ilk günden zorunludur.** Tüm UI metinleri locale JSON dosyalarından gelir, template'lere sabit metin yazılmaz.
 
 ## Neden Go + HTMX?
@@ -30,7 +30,6 @@ Turkcell Superonline'ın ISP modemleri bufferbloat sorununa neden oluyor ve 1 Gb
 
 ## What We're NOT Doing
 
-- IPv6 desteği (v1 kapsamı dışı — `ip6tables -P FORWARD DROP` ile kapatılacak)
 - Wi-Fi yönetimi (kullanıcı ayrı AP'ler kullanıyor)
 - Harici DNS/DHCP web UI (Pi-hole, AdGuard Home) — Unbound + dnsmasq doğrudan Go'dan yönetilecek
 - Veritabanı (tüm config YAML dosyalarında)
@@ -356,7 +355,30 @@ Go Web UI → /var/lib/misc/dnsmasq.leases parse → lease tablosu
 Go Web UI → unbound-control stats → DNS istatistikleri
 ```
 
-### 7. Config Yönetimi
+### 7. IPv6 Dual-Stack Yaklaşımı
+
+Tam dual-stack: IPv4 ve IPv6 paralel çalışır, NAT66 **yapılmaz**.
+
+```
+ISP (PPPoE) ─── IPv4: NAT masquerade (10.0.0.0/24 → WAN IP)
+             └── IPv6: DHCPv6-PD ile global prefix → LAN'a doğrudan dağıtım (NAT yok)
+
+LAN cihazı:
+  IPv4: 10.0.0.x (SNAT/masquerade ile internete çıkış)
+  IPv6: 2001:db8:1::x (global unicast, doğrudan internete çıkış)
+        fd00:abcd:1234::x (ULA, ISP prefix olmasa bile LAN içi IPv6)
+```
+
+**Temel kararlar:**
+- `table inet filter` zaten dual-stack hazır (IPv4 + IPv6 tek tabloda)
+- `table ip nat` yalnızca IPv4 — IPv6 için NAT66 **eklenmeyecek**
+- ISP'den DHCPv6-PD ile /56 veya /64 prefix alınır → LAN'a SLAAC ile dağıtılır
+- ULA (fd00::/8) prefix: ISP IPv6 sunmasa bile LAN cihazları arası IPv6 bağlantı
+- ICMPv6 zorunlu: NDP (Neighbor Discovery), RA (Router Advertisement), MLD — engellenirse IPv6 tamamen çalışmaz
+- `ipv6.enabled: auto` → IPv6CP negotiation başarılırsa otomatik etkinleşir
+- Privacy extensions: RA'da önerilir (RFC 4941, temporary addresses)
+
+### 8. Config Yönetimi
 
 ```go
 // YAML config → Go struct (compile-time type safety)
@@ -369,6 +391,7 @@ type Config struct {
     QoS        QoSConfig        `yaml:"qos"`
     DNS        DNSConfig        `yaml:"dns"`
     DHCP       DHCPConfig       `yaml:"dhcp"`
+    IPv6       IPv6Config       `yaml:"ipv6"`
     VPN        VPNConfig        `yaml:"vpn"`
     OpenVPN    OpenVPNConfig    `yaml:"openvpn"`
     Routing    RoutingConfig    `yaml:"routing"`
@@ -587,12 +610,14 @@ interfaces:
     type: "pppoe"
     mtu: 1492
     mac: "aa:bb:cc:dd:ee:01"            # Otomatik algılanan MAC
+    ipv6: "auto"                         # auto (DHCPv6-PD/SLAAC), manual, off
   - id: "lan"
     device: "enp0s25"
     label: "Ev Ağı"
     role: "lan"
     type: "static"
     address: "10.0.0.1/24"
+    address6: ""                         # DHCPv6-PD prefix'den otomatik atanır (ör: 2001:db8:1::1/64)
     mtu: 1500
     mac: "aa:bb:cc:dd:ee:02"
 
@@ -656,6 +681,7 @@ pppoe:
   lcpEchoFailure: 3
   persist: true
   holdoff: 5
+  ipv6cp: true                           # IPv6CP negotiation etkinleştir (+ipv6 pppd seçeneği)
 
 firewall:
   defaultPolicy: "drop"                 # WAN input/forward
@@ -701,13 +727,29 @@ dhcp:
       ip: "10.0.0.10"
       hostname: "desktop"
 
+ipv6:
+  enabled: "auto"                          # auto | on | off — auto: ISP IPv6CP başarılırsa etkinleşir
+  mode: "dhcpv6-pd"                        # dhcpv6-pd | static | slaac — WAN tarafı IPv6 alma yöntemi
+  wan:
+    acceptRA: true                         # Router Advertisement kabul et (ISP'den)
+    requestPrefix: true                    # DHCPv6-PD ile prefix talep et
+    prefixHint: "/56"                      # ISP'den istenen prefix uzunluğu (/48, /56, /64)
+  lan:
+    mode: "slaac"                          # slaac | dhcpv6-stateless | dhcpv6-stateful
+    ula:
+      enabled: true                        # Unique Local Address (ISP prefix olmasa da LAN içi IPv6)
+      prefix: "fd00:abcd:1234::/48"        # ULA prefix (otomatik üretilebilir)
+    raInterval: 30                         # Router Advertisement gönderim aralığı (saniye)
+    rdnss: true                            # RA ile DNS sunucu bilgisi (RDNSS option)
+  privacy: true                            # RFC 4941 — temporary address (privacy extensions) önerisi RA'da
+
 vpn:
   clients:                                 # Outbound VPN client tünelleri (dış VPN sunuculara bağlanma)
     - name: "nl-amsterdam"
       endpoint: "1.2.3.4:51820"
       privateKey: "..."                  # .credentials.enc
       publicKey: "..."
-      allowedIPs: "0.0.0.0/0"
+      allowedIPs: "0.0.0.0/0, ::/0"       # Dual-stack full tunnel
       dns: "10.0.0.1"
       table: 100
       fwmark: 100
@@ -716,7 +758,8 @@ vpn:
     listenPort: 51820
     privateKey: "..."                    # .credentials.enc (ilk kurulumda otomatik üretilir)
     publicKey: "..."
-    address: "10.10.0.1/24"             # VPN server subnet
+    address: "10.10.0.1/24"             # VPN server subnet (IPv4)
+    address6: "fd10:10::1/64"           # VPN server subnet (IPv6 ULA)
     dns: "10.0.0.1"                     # Client'lara verilecek DNS
     postUp: ""                          # Opsiyonel custom komut
     postDown: ""
@@ -749,11 +792,12 @@ openvpn:
     protocol: "udp"                      # udp | tcp
     port: 1194
     device: "tun"                        # tun | tap
-    subnet: "10.20.0.0/24"              # VPN server subnet
+    subnet: "10.20.0.0/24"              # VPN server subnet (IPv4)
+    subnet6: "fd20:20::/64"             # VPN server subnet (IPv6 ULA)
     dns: "10.0.0.1"
     cipher: "AES-256-GCM"
     auth: "SHA256"
-    tlsAuth: true                        # tls-auth HMAC (ekstra güvenlik katman��)
+    tlsAuth: true                        # tls-auth HMAC (ekstra güvenlik katmanı)
     compression: false                   # Güvenlik riski — varsayılan kapalı
     maxClients: 10
     keepalive: "10 120"                  # ping 10, ping-restart 120
@@ -1066,7 +1110,8 @@ apt install -y \
     dnsmasq \
     rsyslog \
     chrony \
-    qrencode                    # WireGuard peer QR kodu üretimi
+    qrencode \                   # WireGuard peer QR kodu üretimi
+    wide-dhcpv6-client            # DHCPv6-PD prefix delegation client
 
 # dnsmasq: DNS kapalı (port=0), sadece DHCP
 # unbound: recursive DNS resolver + blocklist
@@ -1282,7 +1327,7 @@ Manuel doğrulama:
 - **Dil değiştirme:** TR/EN butonlarına tıkla → sayfa seçilen dilde yenileniyor mu
 - **Sidebar:** tüm navigasyon etiketleri aktif dile göre mi
 
-### Phase 3: Network Interface + VLAN + PPPoE WAN + Health Check (6 gün)
+### Phase 3: Network Interface + VLAN + PPPoE WAN + IPv6 + Health Check (7 gün)
 **Hedef:** Interface algılama ve isimlendirme, 802.1Q VLAN desteği (WAN + LAN), PPPoE ile internete bağlanma, auto-reconnect, ISP credential yakalama, interface health check + otomatik recovery.
 
 Oluşturulacak dosyalar:
@@ -1330,8 +1375,17 @@ Adımlar:
 3. PPPoE service: Connect (`pppd call wan`), Disconnect (`kill pppd`), Status
 4. Credentials `.credentials.enc`'den AES-256-GCM ile çözme
 5. Auto-reconnect: pppd `persist` + `holdoff` seçenekleri
-6. Agent operations: `pppoe.connect`, `pppoe.disconnect`, `pppoe.status`
-7. Network handler: interface listesi (label ile), WAN IP, gateway, uptime
+6. **IPv6 over PPPoE:**
+   - pppd `+ipv6` seçeneği → IPv6CP negotiation etkinleştir
+   - ISP IPv6 destekliyorsa ppp0 interface'de link-local IPv6 adresi oluşur
+   - DHCPv6-PD client: `dhcpcd` veya `wide-dhcpv6-client` ile prefix delegation talep et
+   - ISP'den /56 veya /64 prefix alınır → LAN interface'e atanır (SLAAC ile dağıtım)
+   - `ipv6.enabled: auto` ise: IPv6CP başarılırsa otomatik etkinleşir, başarısızsa IPv4-only
+   - Config'deki `ipv6.wan.prefixHint` ISP'den talep edilen prefix boyutunu belirler
+   - PPPoE yeniden bağlandığında prefix değişebilir → LAN'a yeni RA gönderilir
+   - System dependency: `wide-dhcpv6-client` paketi
+7. Agent operations: `pppoe.connect`, `pppoe.disconnect`, `pppoe.status`
+8. Network handler: interface listesi (label ile), WAN IP (IPv4 + IPv6), gateway, uptime
 8. **PPPoE Credential Yakalama (pppoe-server):**
    - Agent op: `pppoe.sniff.start` → WAN NIC'te `pppoe-server` başlat (require-pap, debug, logfile)
    - ISP modem bağlandığında PAP username/password logdan parse
@@ -1365,8 +1419,12 @@ Manuel doğrulama:
 - **Role değişikliği:** WAN↔LAN swap sonrası ağ doğru çalışıyor mu
 - `ppp0` interface ayağa kalkıyor mu
 - İnternet erişimi: `ping 8.8.8.8`
+- **IPv6 PPPoE:** `ip -6 addr show ppp0` → link-local adresi var mı (IPv6CP başarılı)
+- **DHCPv6-PD:** ISP'den prefix alınıyor mu (`wide-dhcpv6-client` log)
+- **IPv6 LAN:** LAN interface'de global IPv6 adresi atanmış mı (`ip -6 addr show`)
+- **IPv6 auto:** ISP IPv6 desteklemiyorsa IPv4-only modda sorunsuz çalışıyor mu
 - Auto-reconnect: pppd kill sonrası tekrar bağlanıyor mu
-- Web UI'dan durum görünüyor + bağlan/kes çalışıyor mu
+- Web UI'dan durum görünüyor + bağlan/kes çalışıyor mu (IPv4 + IPv6 adresleri)
 - **Credential yakalama:** modem bağlanınca username/password yakalanıyor mu
 - **Health check:** ping/HTTP kontrolleri periyodik çalışıyor mu
 - **Failure escalation:** threshold aşılınca interface restart → pppoe restart → reboot sırası doğru mu
@@ -1381,8 +1439,8 @@ Manuel doğrulama:
 - **VLAN boot:** reboot sonrası VLAN'lar otomatik oluşturulup ayağa kalkıyor mu
 - TR/EN dillerinde tüm network/PPPoE/VLAN metinleri doğru mu
 
-### Phase 4: nftables Firewall + NAT (4 gün)
-**Hedef:** Zone-based firewall, NAT masquerade, MSS clamping, port forwarding, watchdog rollback.
+### Phase 4: nftables Firewall + NAT + IPv6 (5 gün)
+**Hedef:** Zone-based firewall, NAT masquerade (IPv4), IPv6 stateful firewall (NAT66 yok), dual-stack MSS clamping, port forwarding, watchdog rollback.
 
 Oluşturulacak dosyalar:
 - `internal/services/firewall.go`
@@ -1396,17 +1454,23 @@ Oluşturulacak dosyalar:
 
 Adımlar:
 1. nftables Go `text/template` şablonu:
-   - `table inet filter` — input/forward/output chains
-   - `table ip nat` — prerouting (DNAT) + postrouting (masquerade)
-   - MSS clamping: `tcp flags syn tcp option maxseg size set rt mtu`
+   - `table inet filter` — input/forward/output chains (dual-stack: IPv4 + IPv6 tek tabloda)
+   - `table ip nat` — prerouting (DNAT) + postrouting (masquerade) — **yalnızca IPv4, NAT66 yok**
+   - MSS clamping (IPv4): `tcp flags syn tcp option maxseg size set rt mtu`
+   - MSS clamping (IPv6): `ip6 nexthdr tcp tcp flags syn tcp option maxseg size set rt mtu` (IPv6 header 40 byte → MSS 1432)
    - Connection tracking: `ct state established,related accept`
-   - WAN input: default drop, established + ICMP
-   - LAN→WAN forward: accept + masquerade
+   - WAN input: default drop, established + ICMP (IPv4) + ICMPv6 (IPv6)
+   - **ICMPv6 zorunlu allowlist (RFC 4890):**
+     - NDP: `nd-router-solicit` (133), `nd-router-advert` (134), `nd-neighbor-solicit` (135), `nd-neighbor-advert` (136)
+     - MLD: `mld-listener-query` (130), `mld-listener-report` (131), `mld2-listener-report` (143)
+     - Error: `destination-unreachable` (1), `packet-too-big` (2), `time-exceeded` (3), `parameter-problem` (4)
+     - Ping: `echo-request` (128), `echo-reply` (129)
+   - LAN→WAN forward: accept + masquerade (IPv4), accept (IPv6 — NAT yok, global prefix ile doğrudan çıkış)
    - Rate limiting: brute force koruması
 2. AtomicChange: snapshot → validate (`nft -c -f`) → apply → watchdog
 3. Watchdog: 30s goroutine timer, onay gelmezse rollback
 4. Port forwarding: DNAT + forward kuralı CRUD
-5. sysctl: `ip_forward=1`, ipv6 forwarding kapalı
+5. sysctl: `net.ipv4.ip_forward=1`, `net.ipv6.conf.all.forwarding=1` (IPv6 etkinse, config'e bağlı)
 6. **TTL Fix (tethering bypass):**
    - nftables postrouting chain'de: `ip ttl set {value}` (varsayılan 64)
    - Tüm WAN'a çıkan paketlerde TTL sabitlenir → ISP router arkasındaki cihazları ayırt edemez
@@ -1425,9 +1489,14 @@ Manuel doğrulama:
 - `nft list ruleset` beklenen kuralları gösteriyor mu
 - **TTL Fix:** etkinken `traceroute` veya `tcpdump` ile WAN çıkışında TTL sabit mi
 - **TTL Fix kapalı:** TTL normal davranıyor mu (her hop'ta azalıyor)
+- **IPv6 forward:** LAN cihazı IPv6 global adresle internete çıkabiliyor mu (`ping6 2001:4860:4860::8888`)
+- **IPv6 ICMPv6:** NDP çalışıyor mu (neighbor discovery), RA alınıyor mu (`rdisc6 eth0`)
+- **IPv6 firewall:** WAN'dan gelen bağlantılar engelleniyor mu (IPv4 ile aynı politika)
+- **IPv6 MSS clamping:** PPPoE üzerinden büyük IPv6 paketler sorunsuz geçiyor mu
+- **IPv6 NAT yok:** LAN cihazlarında global prefix adresi var mı (`ip -6 addr show`)
 - TR/EN dillerinde firewall metinleri doğru mu
 
-### Phase 5: Unbound DNS + dnsmasq DHCP + Query Logging (4 gün)
+### Phase 5: Unbound DNS + dnsmasq DHCP + Query Logging + IPv6 RA (5 gün)
 **Hedef:** Recursive DNS resolver + reklam engelleme (Unbound), DHCP sunucu (dnsmasq), DNS query logging + istatistikler, config dosyası yönetimi.
 
 Oluşturulacak dosyalar:
@@ -1446,7 +1515,9 @@ Oluşturulacak dosyalar:
 
 Adımlar:
 1. **Unbound config template:**
-   - `server:` �� interface, access-control, cache-size, verbosity
+   - `server:` — interface, access-control, cache-size, verbosity
+   - IPv6 dinleme: `interface: ::0` (dual-stack), `do-ip6: yes`
+   - AAAA sorgu desteği: hem IPv4 hem IPv6 upstream'lere sorgulama
    - Recursive mode: `root-hints` dosyası ile
    - Blocklist: `include: /etc/unbound/blocklist.conf` (her satır: `local-zone: "domain" always_refuse`)
    - Opsiyonel DNS-over-TLS upstream: `forward-zone:` → `forward-tls-upstream: yes`
@@ -1461,6 +1532,14 @@ Adımlar:
    - `dhcp-option=option:router,10.0.0.1`
    - `dhcp-option=option:dns-server,10.0.0.1` (Unbound'a yönlendir)
    - Statik lease'ler: `dhcp-host=aa:bb:cc:dd:ee:ff,10.0.0.10,desktop`
+   - **IPv6 SLAAC/RA (dnsmasq):**
+     - `enable-ra` — Router Advertisement gönderimi etkinleştir
+     - `dhcp-range=::,constructor:lan,ra-only,64,12h` — SLAAC modu (stateless, adres RA ile dağıtılır)
+     - `dhcp-option=option6:dns-server,[::1]` — IPv6 DNS sunucu (Unbound)
+     - `ra-param=lan,{raInterval},0,0` — RA gönderim aralığı config'den
+     - RDNSS option: RA ile DNS bilgisi (RFC 8106)
+     - ULA prefix aktifse: ULA adresleri de RA ile dağıtılır (global + ULA dual)
+     - IPv6 desteği kapalıysa (`ipv6.enabled: off`) bu satırlar config'e eklenmez
 4. **Lease parse:** `/var/lib/misc/dnsmasq.leases` dosyasını oku → `{expiry, mac, ip, hostname}`
 5. **DNS istatistikleri:** `unbound-control stats_noreset` → cache hits, misses, query count
 6. **DNS Query Logging:**
@@ -1559,7 +1638,7 @@ Manuel doğrulama:
 - BBR/CUBIC geçişi çalışıyor mu
 - TR/EN dillerinde QoS sayfası metinleri doğru mu
 
-### Phase 8: WireGuard + OpenVPN + Policy-Based Routing (10 gün)
+### Phase 8: WireGuard + OpenVPN + Policy-Based Routing (11 gün)
 **Hedef:** WireGuard client + server, OpenVPN client + server (PKI), tam kapsamlı PBR motoru, web UI ile yönetim.
 
 Oluşturulacak dosyalar:
@@ -1592,14 +1671,15 @@ Oluşturulacak dosyalar:
 Adımlar:
 1. **WireGuard client tünel yönetimi (outbound):**
    - Config template: key, endpoint, allowed IPs, DNS
+   - IPv6 desteği: `AllowedIPs = 0.0.0.0/0, ::/0` (full tunnel dual-stack)
    - Tünel CRUD: `wg-quick up/down wgN`
    - Keypair: `exec.Command("wg", "genkey")` + `wg pubkey`
-   - Per-tünel routing table: `ip route add default dev wgN table {table_id}`
+   - Per-tünel routing table: `ip route add default dev wgN table {table_id}` + `ip -6 route add default dev wgN table {table_id}`
 2. **WireGuard server (inbound — road warrior):**
    - İlk kurulumda otomatik server keypair üretimi (`wg genkey` + `wg pubkey`)
    - Server config template: `[Interface]` (listenPort, privateKey, address) + `[Peer]` blokları
    - Server interface: `wg0-server` (client interface'lerden ayrı namespace: `wg0`, `wg1`... client, `wgs0` server)
-   - Server subnet: `10.10.0.0/24` (LAN'dan ayrı, configurable)
+   - Server subnet: `10.10.0.0/24` + `fd10:10::0/64` ULA (LAN'dan ayrı, configurable)
    - nftables entegrasyonu:
      - Server peer'lardan LAN'a erişim: `iif wgs0 oif {lan_iface} accept` (forward chain)
      - Server peer'lardan internete çıkış: `iif wgs0 oif ppp0 accept` + NAT masquerade
@@ -1615,7 +1695,7 @@ Adımlar:
        ```ini
        [Interface]
        PrivateKey = {peer_private_key}
-       Address = 10.10.0.2/32
+       Address = 10.10.0.2/32, fd10:10::2/128
        DNS = 10.0.0.1
        MTU = 1420
 
@@ -1623,8 +1703,8 @@ Adımlar:
        PublicKey = {server_public_key}
        PresharedKey = {psk}
        Endpoint = {router_wan_ip_or_ddns}:{port}
-       AllowedIPs = 0.0.0.0/0    # Full tunnel
-       # AllowedIPs = 10.0.0.0/24  # Split tunnel (sadece LAN)
+       AllowedIPs = 0.0.0.0/0, ::/0    # Full tunnel (dual-stack)
+       # AllowedIPs = 10.0.0.0/24, fd00:abcd:1234::/48  # Split tunnel (sadece LAN)
        ```
      - İki mod: full tunnel (tüm trafik router üzerinden) veya split tunnel (sadece LAN'a erişim)
      - İndirme: `GET /vpn/server/peer/{name}/config` → `.conf` dosyası
@@ -1667,7 +1747,8 @@ Adımlar:
      dh /etc/openvpn/pki/dh.pem
      tls-auth /etc/openvpn/pki/ta.key 0
      server 10.20.0.0 255.255.255.0
-     push "redirect-gateway def1"           # Full tunnel
+     server-ipv6 fd20:20::/64               # IPv6 dual-stack VPN subnet
+     push "redirect-gateway def1 ipv6"      # Full tunnel (dual-stack)
      push "dhcp-option DNS 10.0.0.1"
      cipher AES-256-GCM
      auth SHA256
@@ -1940,20 +2021,24 @@ firewallSvc.Apply(rules)
 | DNS query log disk dolması            | logrotate (maxSize + retention), ring buffer in-memory, toggle ile kapatılabilir |
 | OpenVPN PKI private key sızması      | CA/server key /etc/openvpn/pki/ (700 perms), backup'ta AES-256-GCM encrypt      |
 | OpenVPN DH parametresi üretimi yavaş | `easyrsa gen-dh` arka planda, UI'da ilerleme göstergesi, ~2-5dk (i5 3470)        |
+| ISP IPv6 desteği yok/kısıtlı        | `ipv6.enabled: auto` → IPv6CP başarısızsa IPv4-only, ULA ile LAN içi IPv6 korunur |
+| DHCPv6-PD prefix değişimi (PPPoE)    | PPPoE reconnect sonrası yeni prefix → LAN'a RA ile dağıtım, geçiş süresi ~30s    |
+| ICMPv6 engellenmesi → IPv6 çalışmaz | RFC 4890 zorunlu allowlist (NDP, MLD, error messages) — asla drop edilmez          |
+| IPv6 privacy extension tracking      | RA'da privacy extension önerisi (RFC 4941), temporary addresses                    |
 
 ## Tahmini Toplam Süre
 
-| Phase | Konu                                  | Gün | Kümülatif |
-|-------|---------------------------------------|-----|-----------|
-| 1     | İskelet + Agent IPC                   | 3   | 3         |
-| 2     | Web + Auth + HTMX Layout              | 3   | 6         |
-| 3     | Network + VLAN + PPPoE + Health Check | 6   | 12        |
-| 4     | nftables Firewall + NAT               | 4   | 16        |
-| 5     | Unbound DNS + DHCP + Query Logging    | 4   | 20        |
-| 6     | Dashboard + SSE                       | 3   | 23        |
-| 7     | SQM/QoS                               | 3   | 26        |
-| 8     | WireGuard + OpenVPN + PBR             | 10  | 36        |
-| 9     | Samba NAS + M3U                       | 3   | 39        |
-| 10    | Storage + Syslog + NTP + Backup       | 5   | 44        |
+| Phase | Konu                                           | Gün | Kümülatif |
+|-------|------------------------------------------------|-----|-----------|
+| 1     | İskelet + Agent IPC                            | 3   | 3         |
+| 2     | Web + Auth + HTMX Layout                       | 3   | 6         |
+| 3     | Network + VLAN + PPPoE + IPv6 + Health Check   | 7   | 13        |
+| 4     | nftables Firewall + NAT + IPv6                 | 5   | 18        |
+| 5     | Unbound DNS + DHCP + Query Logging + IPv6 RA   | 5   | 23        |
+| 6     | Dashboard + SSE                                | 3   | 26        |
+| 7     | SQM/QoS                                        | 3   | 29        |
+| 8     | WireGuard + OpenVPN + PBR                      | 11  | 40        |
+| 9     | Samba NAS + M3U                                | 3   | 43        |
+| 10    | Storage + Syslog + NTP + Backup                | 5   | 48        |
 
-**Toplam: ~44 geliştirme günü** (tek geliştirici, her gün 4-6 saat efektif çalışma varsayımı)
+**Toplam: ~48 geliştirme günü** (tek geliştirici, her gün 4-6 saat efektif çalışma varsayımı)
