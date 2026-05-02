@@ -1,0 +1,17 @@
+client
+dev tun
+proto {{ .Protocol }}
+remote {{ .RemoteHost }} {{ .RemotePort }}
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+cipher {{ .Cipher }}
+auth {{ .Auth }}
+verb 3
+{{- if .TLSAuth }}
+key-direction 1
+{{- end }}
+{{- if .Username }}
+auth-user-pass /etc/openvpn/client/{{ .Name }}-auth.txt
+{{- end }}

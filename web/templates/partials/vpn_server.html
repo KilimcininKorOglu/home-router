@@ -1,0 +1,14 @@
+{{ define "vpn_server" }}
+<div class="card-header">
+    <span class="card-title">{{ t .Lang "vpn.server" }}</span>
+    {{ if .Server.Active }}
+        <span class="badge badge-success">{{ t .Lang "vpn.status.active" }}</span>
+    {{ else }}
+        <span class="badge badge-error">{{ t .Lang "vpn.status.inactive" }}</span>
+    {{ end }}
+</div>
+<div style="color:var(--text-secondary); font-size:var(--font-sm); margin-bottom:var(--space-md);">
+    Port: {{ .Server.ListenPort }} | Peers: {{ .Server.PeerCount }}
+    {{ if .Server.PublicKey }}| Key: {{ .Server.PublicKey }}{{ end }}
+</div>
+{{ end }}

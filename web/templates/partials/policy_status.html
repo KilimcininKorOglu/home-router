@@ -1,0 +1,12 @@
+{{ define "policy_status" }}
+<div style="font-size:var(--font-sm); color:var(--text-secondary);">
+    {{ range .Policies }}
+    {{ if .Enabled }}
+    <div style="display:flex; justify-content:space-between; padding:var(--space-xs) 0;">
+        <span>{{ .Name }}</span>
+        <span>{{ .Tunnel }} (fwmark via {{ len .SrcMACs }} MACs, {{ len .SrcIPs }} IPs)</span>
+    </div>
+    {{ end }}
+    {{ end }}
+</div>
+{{ end }}
