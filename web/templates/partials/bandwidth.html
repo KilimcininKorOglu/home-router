@@ -1,0 +1,9 @@
+{{ define "bandwidth" }}
+<div class="bandwidth-chart">
+    <canvas id="bandwidth-canvas"></canvas>
+</div>
+<div class="bandwidth-legend">
+    <span><span class="legend-dot" style="background:var(--accent-blue);"></span>{{ t .Lang "dashboard.download" }}</span>
+    <span><span class="legend-dot" style="background:var(--accent-green);"></span>{{ t .Lang "dashboard.upload" }}</span>
+</div>
+{{ end }}
