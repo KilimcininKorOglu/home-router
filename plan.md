@@ -2393,7 +2393,7 @@ Adımlar:
    - Makefile entegrasyonu: `make iso` → cross-compile + ISO build
    - CI/CD: GitHub Actions'da ISO build (release artifact olarak)
 
-5. **İlk Boot Setup Wizard:**
+5. ✅ **İlk Boot Setup Wizard:**
    - `/var/lib/home-router/.first-boot` dosyası varsa web UI'da setup wizard göster
    - Wizard adımları:
      - Admin şifresi belirleme
@@ -2403,7 +2403,7 @@ Adımlar:
    - Wizard tamamlandığında `.first-boot` silinir, normal dashboard gösterilir
    - Wizard atlanabilir (ileri düzey kullanıcı doğrudan config düzenler)
 
-6. **Makefile hedefleri:**
+6. ✅ **Makefile hedefleri:**
    - `make build` — Go binary derle (Linux amd64)
    - `make install` — `install.sh` çalıştır (lokal kurulum)
    - `make iso` — Preseed ISO oluştur (cross-compile + ISO build)
