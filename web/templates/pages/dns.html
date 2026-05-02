@@ -11,25 +11,25 @@
         <div class="card">
             <div class="input-label">{{ t $.Lang "dns.cache" }}</div>
             <div style="font-size:var(--font-2xl); font-weight:700;">{{ .Stats.CacheHits }}</div>
-            <div style="color:var(--text-secondary); font-size:var(--font-xs);">hits</div>
+            <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "dns.cacheHits" }}</div>
         </div>
         <div class="card">
             <div class="input-label">{{ t $.Lang "dns.cache" }}</div>
             <div style="font-size:var(--font-2xl); font-weight:700;">{{ .Stats.CacheMisses }}</div>
-            <div style="color:var(--text-secondary); font-size:var(--font-xs);">misses</div>
+            <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "dns.cacheMisses" }}</div>
         </div>
         <div class="card">
-            <div class="input-label">Blocked</div>
-            <div style="font-size:var(--font-2xl); font-weight:700; color:var(--accent-red);">{{ .Stats.BlockedCount }}</div>
+            <div class="input-label">{{ t $.Lang "dns.blocked" }}</div>
+            <div style="font-size:var(--font-2xl); font-weight:700; color:var(--accent-red);">{{ .Stats.{{ t $.Lang "dns.blocked" }}Count }}</div>
         </div>
     </div>
     {{ end }}
 
-    <!-- Top Domains -->
+    <!-- {{ t $.Lang "dns.queryLog" }} -->
     {{ if .Stats }}{{ if .Stats.TopDomains }}
     <div class="card" style="margin-bottom:var(--space-lg);">
         <div class="card-header">
-            <span class="card-title">Top Domains</span>
+            <span class="card-title">{{ t $.Lang "dns.queryLog" }}</span>
         </div>
         {{ range .Stats.TopDomains }}
         <div style="display:flex; justify-content:space-between; padding:var(--space-xs) 0; border-bottom:1px solid var(--border-color);">
@@ -53,8 +53,8 @@
             <span style="color:var(--text-secondary); width:60px;">{{ .QueryType }}</span>
             <span style="flex:1; font-family:var(--font-mono);">{{ .Domain }}</span>
             <span style="color:var(--text-secondary);">{{ .ClientIP }}</span>
-            {{ if .Blocked }}
-                <span class="badge badge-error">BLOCKED</span>
+            {{ if .{{ t $.Lang "dns.blocked" }} }}
+                <span class="badge badge-error">{{ t $.Lang "dns.blocked" }}</span>
             {{ else }}
                 <span class="badge badge-success">{{ .Status }}</span>
             {{ end }}

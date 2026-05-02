@@ -201,5 +201,27 @@
     "auth.password": "Şifre",
     "auth.wrongPassword": "Geçersiz şifre",
     "auth.logout": "Çıkış Yap",
-    "auth.sessionExpired": "Oturum süresi doldu"
+    "auth.sessionExpired": "Oturum süresi doldu",
+
+    "network.up": "AÇIK",
+    "network.down": "KAPALI",
+    "network.speed": "Mbps",
+    "network.port": "Port",
+    "network.peers": "Eşler",
+    "network.clients": "İstemciler",
+    "network.expired": "Süresi Dolmuş",
+
+    "dns.blocked": "Engellenen",
+    "dns.totalQueries": "Toplam Sorgu",
+    "dns.cacheHits": "Önbellek İsabet",
+    "dns.cacheMisses": "Önbellek Kaçırma",
+    "dns.updateBlocklist": "Güncelle",
+    "dns.blocklistDesc": "Engelleme listesi kaynakları router.yaml'da yapılandırılmıştır. Güncellemek için tıklayın.",
+
+    "openvpn.pkiNotReady": "PKI başlatılmamış",
+    "openvpn.initPki": "PKI Oluştur",
+
+    "pppoe.startCapture": "Yakalamayı Başlat",
+    "pppoe.stopCapture": "Yakalamayı Durdur",
+    "pppoe.captureDesc": "ISP kimlik bilgilerini modemden yakalamak için WAN arayüzünde PPPoE sunucu başlatın."
 }

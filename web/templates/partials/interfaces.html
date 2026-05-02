@@ -7,11 +7,11 @@
     </div>
     <div style="text-align:right;">
         {{ if eq .State "up" }}
-            <span class="badge badge-success">UP</span>
+            <span class="badge badge-success">{{ t $.Lang "network.up" }}</span>
         {{ else }}
-            <span class="badge badge-error">DOWN</span>
+            <span class="badge badge-error">{{ t $.Lang "network.down" }}</span>
         {{ end }}
-        {{ if .Speed }}<span style="color:var(--text-secondary); font-size:var(--font-xs); margin-left:var(--space-sm);">{{ .Speed }} Mbps</span>{{ end }}
+        {{ if .Speed }}<span style="color:var(--text-secondary); font-size:var(--font-xs); margin-left:var(--space-sm);">{{ .Speed }} {{ t $.Lang "network.speed" }}</span>{{ end }}
     </div>
 </div>
 {{ end }}

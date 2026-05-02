@@ -45,7 +45,7 @@
                 {{ if .Active }}
                     <span class="badge badge-success">{{ t $.Lang "common.enabled" }}</span>
                 {{ else }}
-                    <span class="badge badge-error">Expired</span>
+                    <span class="badge badge-error">{{ t $.Lang "network.expired" }}</span>
                 {{ end }}
             </div>
         </div>

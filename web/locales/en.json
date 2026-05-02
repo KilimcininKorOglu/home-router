@@ -201,5 +201,27 @@
     "auth.password": "Password",
     "auth.wrongPassword": "Invalid password",
     "auth.logout": "Logout",
-    "auth.sessionExpired": "Session expired"
+    "auth.sessionExpired": "Session expired",
+
+    "network.up": "UP",
+    "network.down": "DOWN",
+    "network.speed": "Mbps",
+    "network.port": "Port",
+    "network.peers": "Peers",
+    "network.clients": "Clients",
+    "network.expired": "Expired",
+
+    "dns.blocked": "Blocked",
+    "dns.totalQueries": "Total Queries",
+    "dns.cacheHits": "Cache Hits",
+    "dns.cacheMisses": "Cache Misses",
+    "dns.updateBlocklist": "Update",
+    "dns.blocklistDesc": "Blocklist sources are configured in router.yaml. Click Update to download and apply.",
+
+    "openvpn.pkiNotReady": "PKI not initialized",
+    "openvpn.initPki": "Initialize PKI",
+
+    "pppoe.startCapture": "Start Capture",
+    "pppoe.stopCapture": "Stop Capture",
+    "pppoe.captureDesc": "Start PPPoE server on WAN interface to capture ISP credentials from modem."
 }

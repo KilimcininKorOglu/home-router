@@ -5,7 +5,7 @@
     <span style="flex:1; font-family:var(--font-mono);">{{ .Domain }}</span>
     <span style="color:var(--text-secondary);">{{ .ClientIP }}</span>
     {{ if .Blocked }}
-        <span class="badge badge-error">BLOCKED</span>
+        <span class="badge badge-error">{{ t $.Lang "dns.blocked" }}</span>
     {{ else }}
         <span class="badge badge-success">{{ .Status }}</span>
     {{ end }}
