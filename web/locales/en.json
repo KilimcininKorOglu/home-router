@@ -140,6 +140,7 @@
     "settings.changeRootPassword": "Change Root Password",
     "settings.rootPassword": "Root Password",
     "settings.rootPasswordConfirm": "Confirm Root Password",
+    "settings.domain": "Domain",
     "settings.updateHostname": "Update Hostname",
     "settings.updateTimezone": "Update Timezone",
     "settings.changePassword": "Change Password",

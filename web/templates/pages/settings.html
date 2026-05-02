@@ -16,9 +16,19 @@
             <span class="card-title">{{ t $.Lang "settings.updateHostname" }}</span>
         </div>
         <form hx-post="/settings/hostname" hx-swap="none" style="padding-top:var(--space-md);">
-            <div class="input-group" style="margin-bottom:var(--space-md);">
-                <label class="input-label">{{ t $.Lang "settings.hostname" }}</label>
-                <input type="text" class="input" name="hostname" value="{{ .Hostname }}" maxlength="63" required>
+            <div style="display:grid; grid-template-columns:1fr auto 1fr; gap:var(--space-sm); align-items:end; margin-bottom:var(--space-md);">
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "settings.hostname" }}</label>
+                    <input type="text" class="input" name="hostname" value="{{ .Hostname }}" maxlength="63" required>
+                </div>
+                <span style="padding-bottom:var(--space-md); color:var(--text-secondary); font-size:var(--font-xl); font-weight:700;">.</span>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "settings.domain" }}</label>
+                    <input type="text" class="input" name="domain" value="{{ .Domain }}" maxlength="63" required>
+                </div>
+            </div>
+            <div style="color:var(--text-secondary); font-size:var(--font-sm); margin-bottom:var(--space-md);">
+                FQDN: <strong>{{ .FQDN }}</strong>
             </div>
             <button type="submit" class="btn btn-primary btn-sm">{{ t $.Lang "common.save" }}</button>
         </form>

@@ -140,6 +140,7 @@
     "settings.changeRootPassword": "Root Şifresi Değiştir",
     "settings.rootPassword": "Root Şifresi",
     "settings.rootPasswordConfirm": "Root Şifresi Tekrar",
+    "settings.domain": "Alan Adı",
     "settings.updateHostname": "Hostname Güncelle",
     "settings.updateTimezone": "Saat Dilimi Güncelle",
     "settings.changePassword": "Şifre Değiştir",

@@ -30,6 +30,8 @@ func (h *SystemHandler) HandleSettingsPage(w http.ResponseWriter, r *http.Reques
 		Page: "settings",
 		Data: map[string]any{
 			"Hostname": h.cfg.System.Hostname,
+			"Domain":   h.cfg.System.Domain,
+			"FQDN":     h.cfg.System.Hostname + "." + h.cfg.System.Domain,
 			"Timezone": h.cfg.System.Timezone,
 			"Language": h.cfg.System.Language,
 			"TLSMode":  h.cfg.System.TLS.Mode,
@@ -106,6 +108,7 @@ func (h *SystemHandler) HandleChangeRootPassword(w http.ResponseWriter, r *http.
 func (h *SystemHandler) HandleUpdateHostname(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	hostname := r.FormValue("hostname")
+	domain := r.FormValue("domain")
 
 	if hostname == "" || len(hostname) > 63 {
 		http.Error(w, "Invalid hostname", http.StatusBadRequest)
@@ -113,10 +116,13 @@ func (h *SystemHandler) HandleUpdateHostname(w http.ResponseWriter, r *http.Requ
 	}
 
 	h.cfg.System.Hostname = hostname
+	if domain != "" {
+		h.cfg.System.Domain = domain
+	}
 
 	netutil.Run(context.Background(), "hostnamectl", "set-hostname", hostname)
 
-	log.Printf("hostname changed to %s", hostname)
+	log.Printf("hostname changed to %s.%s", hostname, h.cfg.System.Domain)
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Trigger", "settingsUpdated")
