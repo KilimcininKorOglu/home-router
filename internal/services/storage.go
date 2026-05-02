@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/KilimcininKorOglu/home-router/internal/config"
@@ -165,4 +166,132 @@ func (s *StorageService) GetDiskUsage(ctx context.Context) ([]DiskUsage, error) 
 func (s *StorageService) SetHDDStandby(ctx context.Context, device string, timeout int) error {
 	_, err := netutil.Run(ctx, "hdparm", "-S", fmt.Sprintf("%d", timeout), device)
 	return err
+}
+
+type AvailableDisk struct {
+	Device string
+	Model  string
+	Size   string
+	Type   string
+	InUse  bool
+}
+
+func (s *StorageService) DiscoverDisks(ctx context.Context) ([]AvailableDisk, error) {
+	out, err := netutil.RunSimple(ctx, "lsblk", "-d", "-n", "-o", "NAME,SIZE,MODEL,TYPE,MOUNTPOINT", "--json")
+	if err != nil {
+		return s.discoverDisksFallback(ctx)
+	}
+
+	_ = out
+	return s.discoverDisksFallback(ctx)
+}
+
+func (s *StorageService) discoverDisksFallback(ctx context.Context) ([]AvailableDisk, error) {
+	out, err := netutil.RunSimple(ctx, "lsblk", "-d", "-n", "-o", "NAME,SIZE,MODEL,TYPE,MOUNTPOINT")
+	if err != nil {
+		return nil, fmt.Errorf("lsblk: %w", err)
+	}
+
+	var disks []AvailableDisk
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+		if fields[3] != "disk" {
+			continue
+		}
+
+		disk := AvailableDisk{
+			Device: "/dev/" + fields[0],
+			Size:   fields[1],
+			Type:   fields[3],
+		}
+		if len(fields) >= 3 {
+			disk.Model = fields[2]
+		}
+		if len(fields) >= 5 && fields[4] != "" {
+			disk.InUse = true
+		}
+
+		rootDisk, _ := netutil.RunSimple(ctx, "findmnt", "-n", "-o", "SOURCE", "/")
+		if strings.Contains(strings.TrimSpace(rootDisk), fields[0]) {
+			disk.InUse = true
+		}
+
+		disks = append(disks, disk)
+	}
+
+	return disks, nil
+}
+
+func (s *StorageService) CreateRAID(ctx context.Context, level int, devices []string, mountPoint string) error {
+	if len(devices) < 2 && level != 0 {
+		return fmt.Errorf("RAID-%d requires at least 2 devices", level)
+	}
+
+	mdDevice := s.cfg.Storage.RAID.Device
+	if mdDevice == "" {
+		mdDevice = "/dev/md0"
+	}
+
+	args := []string{
+		"--create", mdDevice,
+		"--level", fmt.Sprintf("%d", level),
+		"--raid-devices", fmt.Sprintf("%d", len(devices)),
+	}
+	args = append(args, devices...)
+
+	_, err := netutil.Run(ctx, "mdadm", args...)
+	if err != nil {
+		return fmt.Errorf("mdadm create: %w", err)
+	}
+
+	_, err = netutil.Run(ctx, "mkfs.ext4", "-F", mdDevice)
+	if err != nil {
+		return fmt.Errorf("mkfs: %w", err)
+	}
+
+	netutil.Run(ctx, "mkdir", "-p", mountPoint)
+	_, err = netutil.Run(ctx, "mount", mdDevice, mountPoint)
+	if err != nil {
+		return fmt.Errorf("mount: %w", err)
+	}
+
+	fstabLine := fmt.Sprintf("%s %s ext4 defaults 0 2\n", mdDevice, mountPoint)
+	f, err := os.OpenFile("/etc/fstab", os.O_APPEND|os.O_WRONLY, 0o644)
+	if err == nil {
+		f.WriteString(fstabLine)
+		f.Close()
+	}
+
+	netutil.Run(ctx, "mdadm", "--detail", "--scan", "--verbose")
+
+	s.cfg.Storage.RAID.Device = mdDevice
+	s.cfg.Storage.RAID.Level = level
+	s.cfg.Storage.RAID.Members = devices
+
+	return nil
+}
+
+func (s *StorageService) FormatAndMount(ctx context.Context, device, mountPoint string) error {
+	_, err := netutil.Run(ctx, "mkfs.ext4", "-F", device)
+	if err != nil {
+		return fmt.Errorf("mkfs %s: %w", device, err)
+	}
+
+	netutil.Run(ctx, "mkdir", "-p", mountPoint)
+	_, err = netutil.Run(ctx, "mount", device, mountPoint)
+	if err != nil {
+		return fmt.Errorf("mount %s: %w", device, err)
+	}
+
+	fstabLine := fmt.Sprintf("%s %s ext4 defaults 0 2\n", device, mountPoint)
+	f, err := os.OpenFile("/etc/fstab", os.O_APPEND|os.O_WRONLY, 0o644)
+	if err == nil {
+		f.WriteString(fstabLine)
+		f.Close()
+	}
+
+	return nil
 }

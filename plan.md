@@ -2285,7 +2285,7 @@ Oluşturulacak dosyalar:
 - `deploy/backup.sh`
 
 Adımlar:
-1. ✅ RAID: `mdadm --detail` parse, degraded alarm
+1. ✅ RAID: `mdadm --detail` parse, degraded alarm + disk keşfi (`lsblk`) + RAID oluşturma (`mdadm --create`) + format+mount web UI'dan
 2. ✅ SMART: `smartctl -a` → sağlık skoru, sıcaklık, hata
 3. ✅ Config backup: `tar.gz` export/import (config/ + unbound + dnsmasq + chrony config)
 4. ✅ Factory reset: varsayılan config restore

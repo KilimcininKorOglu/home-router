@@ -417,9 +417,10 @@ type StorageConfig struct {
 }
 
 type RAIDConfig struct {
-	Device  string   `yaml:"device"`
-	Level   int      `yaml:"level"`
-	Members []string `yaml:"members"`
+	Device     string   `yaml:"device"`
+	Level      int      `yaml:"level"`
+	Members    []string `yaml:"members"`
+	MountPoint string   `yaml:"mountPoint"`
 }
 
 var configMu sync.RWMutex
