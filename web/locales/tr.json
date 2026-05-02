@@ -217,6 +217,10 @@
     "network.peers": "Eşler",
     "network.clients": "İstemciler",
     "network.expired": "Süresi Dolmuş",
+    "network.macClone": "MAC Klonlama",
+    "network.macClone.desc": "WAN arayüzünün MAC adresini önceki cihazınızla eşleştirin",
+    "network.macClone.current": "Mevcut MAC",
+    "network.macClone.clone": "Klonlanacak MAC",
 
     "dns.blocked": "Engellenen",
     "dns.totalQueries": "Toplam Sorgu",

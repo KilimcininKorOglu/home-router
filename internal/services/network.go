@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/KilimcininKorOglu/home-router/internal/config"
@@ -75,6 +76,35 @@ type InterfaceStatus struct {
 	Addresses []string
 	RxBytes   uint64
 	TxBytes   uint64
+}
+
+func (s *NetworkService) ApplyMACClone(ctx context.Context, device, cloneMAC string) error {
+	if cloneMAC == "" {
+		return nil
+	}
+	if err := netutil.ValidateMAC(cloneMAC); err != nil {
+		return err
+	}
+
+	netutil.Run(ctx, "ip", "link", "set", device, "down")
+	_, err := netutil.Run(ctx, "ip", "link", "set", device, "address", cloneMAC)
+	if err != nil {
+		return fmt.Errorf("set MAC %s on %s: %w", cloneMAC, device, err)
+	}
+	netutil.Run(ctx, "ip", "link", "set", device, "up")
+
+	log.Printf("MAC clone applied: %s → %s", device, cloneMAC)
+	return nil
+}
+
+func (s *NetworkService) RestoreMACClones(ctx context.Context) {
+	for _, iface := range s.cfg.Interfaces {
+		if iface.CloneMAC != "" {
+			if err := s.ApplyMACClone(ctx, iface.Device, iface.CloneMAC); err != nil {
+				log.Printf("MAC clone restore %s: %v", iface.Device, err)
+			}
+		}
+	}
 }
 
 func (s *NetworkService) CreateVLAN(ctx context.Context, parentDevice string, vid int, address string, mtu int) error {

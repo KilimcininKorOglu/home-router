@@ -217,6 +217,10 @@
     "network.peers": "Peers",
     "network.clients": "Clients",
     "network.expired": "Expired",
+    "network.macClone": "MAC Clone",
+    "network.macClone.desc": "Override WAN interface MAC address to match your previous device",
+    "network.macClone.current": "Current MAC",
+    "network.macClone.clone": "Clone MAC",
 
     "dns.blocked": "Blocked",
     "dns.totalQueries": "Total Queries",

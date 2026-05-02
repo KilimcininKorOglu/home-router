@@ -84,6 +84,7 @@ type InterfaceConfig struct {
 	Address6 string `yaml:"address6"`
 	MTU      int    `yaml:"mtu"`
 	MAC      string `yaml:"mac"`
+	CloneMAC string `yaml:"cloneMAC"`
 	IPv6     string `yaml:"ipv6"`
 }
 
