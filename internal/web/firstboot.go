@@ -33,25 +33,20 @@ func SetupFirstBootNetworking(ctx context.Context) ([]firstBootNIC, error) {
 	}
 
 	var nics []firstBootNIC
-	subnets := []struct{ ip, cidr string }{
-		{"10.10.10.1", "10.10.10.1/24"},
-		{"10.10.20.1", "10.10.20.1/24"},
-		{"10.10.30.1", "10.10.30.1/24"},
-		{"10.10.40.1", "10.10.40.1/24"},
-	}
+	nicIdx := 0
 
-	idx := 0
 	for _, iface := range ifaces {
 		if iface.IsVirtual || iface.Name == "lo" {
 			continue
 		}
-		if idx >= len(subnets) {
-			break
-		}
+
+		thirdOctet := 10 + nicIdx*10
+		ip := fmt.Sprintf("10.10.%d.1", thirdOctet)
+		cidr := fmt.Sprintf("10.10.%d.1/24", thirdOctet)
 
 		netutil.Run(ctx, "ip", "link", "set", iface.Name, "up")
 		netutil.Run(ctx, "ip", "addr", "flush", "dev", iface.Name)
-		_, err := netutil.Run(ctx, "ip", "addr", "add", subnets[idx].cidr, "dev", iface.Name)
+		_, err := netutil.Run(ctx, "ip", "addr", "add", cidr, "dev", iface.Name)
 		if err != nil {
 			log.Printf("first-boot: failed to assign IP to %s: %v", iface.Name, err)
 			continue
@@ -59,12 +54,12 @@ func SetupFirstBootNetworking(ctx context.Context) ([]firstBootNIC, error) {
 
 		nics = append(nics, firstBootNIC{
 			Device: iface.Name,
-			IP:     subnets[idx].ip,
-			CIDR:   subnets[idx].cidr,
+			IP:     ip,
+			CIDR:   cidr,
 		})
 
-		log.Printf("first-boot: %s → %s", iface.Name, subnets[idx].cidr)
-		idx++
+		log.Printf("first-boot: %s → %s", iface.Name, cidr)
+		nicIdx++
 	}
 
 	return nics, nil
