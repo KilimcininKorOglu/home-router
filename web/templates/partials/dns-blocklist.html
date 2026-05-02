@@ -1,0 +1,11 @@
+{{ define "dns-blocklist" }}
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">{{ t .Lang "dns.blocklist" }}</span>
+        <button class="btn btn-primary btn-sm" hx-post="/dns/blocklist/update" hx-swap="none">Update</button>
+    </div>
+    <p style="color:var(--text-secondary); font-size:var(--font-sm);">
+        Blocklist sources are configured in router.yaml. Click Update to download and apply.
+    </p>
+</div>
+{{ end }}

@@ -1,0 +1,17 @@
+{{ define "lease_table" }}
+{{ range .Leases }}
+<div style="display:flex; align-items:center; justify-content:space-between; padding:var(--space-sm) 0; border-bottom:1px solid var(--border-color);">
+    <div>
+        <div style="font-weight:700;">{{ if .Hostname }}{{ .Hostname }}{{ else }}{{ .IP }}{{ end }}</div>
+        <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ .MAC }} — {{ .IP }}</div>
+    </div>
+    <div>
+        {{ if .Active }}
+            <span class="badge badge-success">Active</span>
+        {{ else }}
+            <span class="badge badge-error">Expired</span>
+        {{ end }}
+    </div>
+</div>
+{{ end }}
+{{ end }}

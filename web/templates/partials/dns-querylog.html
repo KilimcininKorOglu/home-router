@@ -1,0 +1,14 @@
+{{ define "dns-querylog" }}
+{{ range .Queries }}
+<div style="display:flex; align-items:center; gap:var(--space-md); padding:var(--space-xs) 0; border-bottom:1px solid var(--border-color); font-size:var(--font-sm);">
+    <span style="color:var(--text-secondary); width:60px;">{{ .QueryType }}</span>
+    <span style="flex:1; font-family:var(--font-mono);">{{ .Domain }}</span>
+    <span style="color:var(--text-secondary);">{{ .ClientIP }}</span>
+    {{ if .Blocked }}
+        <span class="badge badge-error">BLOCKED</span>
+    {{ else }}
+        <span class="badge badge-success">{{ .Status }}</span>
+    {{ end }}
+</div>
+{{ end }}
+{{ end }}
