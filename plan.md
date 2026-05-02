@@ -557,14 +557,21 @@ system:
   webBind: "10.0.0.1"                   # Sadece LAN
 
 interfaces:
-  wan:
-    device: "enp3s0"                     # udev rule ile sabitlenmiş
+  - id: "wan"                            # Sistem içi tanımlayıcı (değiştirilemez)
+    device: "enp3s0"                     # Fiziksel NIC (udev rule ile sabitlenmiş)
+    label: "WAN Fiber"                   # Kullanıcı tarafından verilen görünen isim
+    role: "wan"                          # wan | lan | unused
     type: "pppoe"
     mtu: 1492
-  lan:
+    mac: "aa:bb:cc:dd:ee:01"            # Otomatik algılanan MAC
+  - id: "lan"
     device: "enp0s25"
+    label: "Ev Ağı"
+    role: "lan"
+    type: "static"
     address: "10.0.0.1/24"
     mtu: 1500
+    mac: "aa:bb:cc:dd:ee:02"
 
 pppoe:
   username: "..."                        # .credentials.enc'den okunur
@@ -691,7 +698,9 @@ Go'da HTMX ile iki tür endpoint var: **sayfa** (tam HTML) ve **partial** (HTML 
 ### Network / PPPoE
 | Method | Path                       | Tür     | Açıklama                               |
 |--------|----------------------------|---------|-----------------------------------------|
-| GET    | /network                   | Sayfa   | Ağ ayarları sayfası                     |
+| GET    | /network                   | Sayfa   | Ağ ayarları + interface yönetimi        |
+| GET    | /partials/interfaces       | Partial | Algılanan tüm NIC'ler + durumları       |
+| PUT    | /network/interface/{id}    | Partial | Interface label, role, MTU düzenle      |
 | GET    | /partials/wan-status       | Partial | WAN durum kartı                        |
 | POST   | /pppoe/connect             | Partial | PPPoE bağlantısını başlat               |
 | POST   | /pppoe/disconnect          | Partial | PPPoE bağlantısını kes                  |
@@ -1049,10 +1058,11 @@ Manuel doğrulama:
 - **Dil değiştirme:** TR/EN butonlarına tıkla → sayfa seçilen dilde yenileniyor mu
 - **Sidebar:** tüm navigasyon etiketleri aktif dile göre mi
 
-### Phase 3: PPPoE WAN Bağlantısı + Credential Yakalama (3 gün)
-**Hedef:** PPPoE ile internete bağlanma, auto-reconnect, bağlantı durum izleme, ISP credential yakalama (pppoe-server).
+### Phase 3: Network Interface Yönetimi + PPPoE WAN + Credential Yakalama (4 gün)
+**Hedef:** Interface algılama ve isimlendirme, PPPoE ile internete bağlanma, auto-reconnect, bağlantı durum izleme, ISP credential yakalama.
 
 Oluşturulacak dosyalar:
+- `internal/services/network.go` — NIC algılama, interface label/role yönetimi
 - `internal/services/pppoe.go` — pppd yönetimi + pppoe-server credential sniff
 - `configs/sysconf/pppoe-peer.tmpl`
 - `configs/sysconf/pppoe-options.tmpl`
@@ -1060,34 +1070,44 @@ Oluşturulacak dosyalar:
 - `internal/web/handlers/pppoe.go`
 - `internal/web/handlers/network.go`
 - `web/templates/pages/network.html`
+- `web/templates/partials/interfaces.html` — Interface listesi + düzenleme
 - `web/templates/partials/wan-status.html`
 - `web/templates/partials/pppoe-sniff.html` — credential yakalama UI
 
 Adımlar:
-1. `text/template` ile `/etc/ppp/peers/wan` ve options dosyası render
-2. PPPoE service: Connect (`pppd call wan`), Disconnect (`kill pppd`), Status
-3. Credentials `.credentials.enc`'den AES-256-GCM ile çözme
-4. Auto-reconnect: pppd `persist` + `holdoff` seçenekleri
-5. Agent operations: `pppoe.connect`, `pppoe.disconnect`, `pppoe.status`
-6. Network handler: interface listesi, WAN IP, gateway, uptime
-7. **PPPoE Credential Yakalama (pppoe-server):**
+1. **Interface algılama ve yönetimi:**
+   - `/sys/class/net/` tarayarak tüm fiziksel NIC'leri algıla (virtual, loopback hariç)
+   - Her NIC için: device name, MAC, link state (up/down), speed, driver
+   - İlk çalıştırmada algılanan NIC'leri `interfaces` config'e varsayılan değerlerle ekle
+   - Web UI: algılanan interface listesi → her biri için label, role (wan/lan/unused), MTU düzenlenebilir
+   - Label her yerde kullanılır: dashboard, firewall, QoS, PBR — ham device name yerine
+   - Role değişikliği: uyarı + onay (WAN/LAN rolü değiştirmek ağ kesintisi yapar)
+2. `text/template` ile `/etc/ppp/peers/wan` ve options dosyası render
+3. PPPoE service: Connect (`pppd call wan`), Disconnect (`kill pppd`), Status
+4. Credentials `.credentials.enc`'den AES-256-GCM ile çözme
+5. Auto-reconnect: pppd `persist` + `holdoff` seçenekleri
+6. Agent operations: `pppoe.connect`, `pppoe.disconnect`, `pppoe.status`
+7. Network handler: interface listesi (label ile), WAN IP, gateway, uptime
+8. **PPPoE Credential Yakalama (pppoe-server):**
    - Agent op: `pppoe.sniff.start` → WAN NIC'te `pppoe-server` başlat (require-pap, debug, logfile)
    - ISP modem bağlandığında PAP username/password logdan parse
    - Agent op: `pppoe.sniff.stop` → pppoe-server durdur
    - Yakalanan credentials → AES-256-GCM ile `.credentials.enc`'ye kaydet
    - Web UI: "Credential Yakala" butonu → durum göstergesi → bulunan credentials
    - Güvenlik: credentials sadece maskelenmiş gösterilir (son 4 karakter), full gösterme yok
-8. HTMX: bağlan/kes butonları → partial swap ile durum güncelleme
-9. **i18n:** Tüm template metinleri `{{ t .Lang "pppoe.*" }}` ile — buton etiketleri, durum mesajları, onay diyalogları, sniff UI
+9. HTMX: interface kartları, bağlan/kes butonları → partial swap ile durum güncelleme
+10. **i18n:** `{{ t .Lang "network.*" }}` ve `{{ t .Lang "pppoe.*" }}` ile tüm metinler
 
 Manuel doğrulama:
+- **Interface algılama:** tüm fiziksel NIC'ler listeleniyor mu
+- **Label:** interface'e verilen isim dashboard ve diğer sayfalarda görünüyor mu
+- **Role değişikliği:** WAN↔LAN swap sonrası ağ doğru çalışıyor mu
 - `ppp0` interface ayağa kalkıyor mu
 - İnternet erişimi: `ping 8.8.8.8`
 - Auto-reconnect: pppd kill sonrası tekrar bağlanıyor mu
 - Web UI'dan durum görünüyor + bağlan/kes çalışıyor mu
 - **Credential yakalama:** modem bağlanınca username/password yakalanıyor mu
-- Yakalanan credentials `.credentials.enc`'ye kaydediliyor mu
-- TR/EN dillerinde tüm PPPoE metinleri doğru mu
+- TR/EN dillerinde tüm network/PPPoE metinleri doğru mu
 
 ### Phase 4: nftables Firewall + NAT (4 gün)
 **Hedef:** Zone-based firewall, NAT masquerade, MSS clamping, port forwarding, watchdog rollback.
@@ -1467,13 +1487,13 @@ firewallSvc.Apply(rules)
 |-------|-------------------------------|-----|-----------|
 | 1     | İskelet + Agent IPC           | 3   | 3         |
 | 2     | Web + Auth + HTMX Layout      | 3   | 6         |
-| 3     | PPPoE WAN                     | 3   | 9         |
-| 4     | nftables Firewall + NAT       | 4   | 13        |
-| 5     | Unbound DNS + dnsmasq DHCP    | 3   | 16        |
-| 6     | Dashboard + SSE               | 3   | 19        |
-| 7     | SQM/QoS                       | 3   | 22        |
-| 8     | WireGuard VPN + Policy-Based Routing | 7   | 29        |
-| 9     | Samba NAS + M3U               | 3   | 32        |
-| 10    | Storage + Syslog + Backup + Hardening | 4   | 36        |
+| 3     | Network Interface + PPPoE WAN | 4   | 10        |
+| 4     | nftables Firewall + NAT       | 4   | 14        |
+| 5     | Unbound DNS + dnsmasq DHCP    | 3   | 17        |
+| 6     | Dashboard + SSE               | 3   | 20        |
+| 7     | SQM/QoS                       | 3   | 23        |
+| 8     | WireGuard VPN + Policy-Based Routing | 7   | 30        |
+| 9     | Samba NAS + M3U               | 3   | 33        |
+| 10    | Storage + Syslog + Backup + Hardening | 4   | 37        |
 
-**Toplam: ~36 geliştirme günü** (tek geliştirici, her gün 4-6 saat efektif çalışma varsayımı)
+**Toplam: ~37 geliştirme günü** (tek geliştirici, her gün 4-6 saat efektif çalışma varsayımı)
