@@ -471,7 +471,10 @@ home-router/
 │   │       ├── bandwidth.html    # Bandwidth grafiği container
 │   │       ├── lease_table.html  # DHCP lease tablosu (HTMX swap)
 │   │       ├── fw_rules.html     # Firewall kural listesi
-│   │       ├── vpn_panel.html    # VPN cihaz atama paneli
+│   │       ├── vpn_clients.html   # Client tünel listesi + durum
+│   │       ├── vpn_server.html   # Server durumu + peer listesi + QR
+│   │       ├── vpn_peer_form.html# Peer ekleme/düzenleme formu
+│   │       ├── vpn_panel.html    # VPN cihaz atama paneli (PBR entegrasyonu)
 │   │       ├── vpn_device.html   # Tekil cihaz kartı (draggable)
 │   │       ├── policy_list.html  # PBR politika listesi (sürükle-bırak sıralama)
 │   │       ├── policy_form.html  # PBR politika ekleme/düzenleme formu
@@ -651,7 +654,7 @@ dhcp:
       hostname: "desktop"
 
 vpn:
-  tunnels:
+  clients:                                 # Outbound VPN client tünelleri (dış VPN sunuculara bağlanma)
     - name: "nl-amsterdam"
       endpoint: "1.2.3.4:51820"
       privateKey: "..."                  # .credentials.enc
@@ -660,6 +663,27 @@ vpn:
       dns: "10.0.0.1"
       table: 100
       fwmark: 100
+  server:                                  # Inbound VPN server (eve dışarıdan bağlanma)
+    enabled: false
+    listenPort: 51820
+    privateKey: "..."                    # .credentials.enc (ilk kurulumda otomatik üretilir)
+    publicKey: "..."
+    address: "10.10.0.1/24"             # VPN server subnet
+    dns: "10.0.0.1"                     # Client'lara verilecek DNS
+    postUp: ""                          # Opsiyonel custom komut
+    postDown: ""
+    mtu: 1420                           # PPPoE altı: 1492 - 60 (WG overhead) - 12 (margin)
+    peers:                               # Bağlanacak uzak cihazlar (road warrior)
+      - name: "telefon"
+        publicKey: "..."
+        presharedKey: "..."              # .credentials.enc (opsiyonel, ekstra güvenlik)
+        allowedIPs: "10.10.0.2/32"      # Peer'a atanan IP
+        keepalive: 25                    # NAT traversal (saniye, 0=kapalı)
+      - name: "laptop"
+        publicKey: "..."
+        presharedKey: "..."
+        allowedIPs: "10.10.0.3/32"
+        keepalive: 25
   deviceAssignments:
     "aa:bb:cc:dd:ee:ff": "nl-amsterdam"
 
@@ -785,14 +809,26 @@ Go'da HTMX ile iki tür endpoint var: **sayfa** (tam HTML) ve **partial** (HTML 
 | PUT    | /qos/limits             | Partial | Bant genişliği limitleri           |
 | PUT    | /qos/congestion         | Partial | Congestion control (BBR/CUBIC)     |
 
-### VPN (Tünel Yönetimi)
-| Method | Path                        | Tür     | Açıklama                      |
-|--------|-----------------------------|---------|--------------------------------|
-| GET    | /vpn                        | Sayfa   | VPN tünel yönetimi sayfası     |
-| GET    | /partials/vpn-tunnels       | Partial | Tünel listesi + durum          |
-| POST   | /vpn/tunnel                 | Partial | Yeni tünel ekle                |
-| PUT    | /vpn/tunnel/{name}          | Partial | Tünel düzenle                  |
-| DELETE | /vpn/tunnel/{name}          | Partial | Tünel sil                      |
+### VPN Client (Outbound Tüneller)
+| Method | Path                        | Tür     | Açıklama                              |
+|--------|-----------------------------|---------|----------------------------------------|
+| GET    | /vpn                        | Sayfa   | VPN yönetimi (client + server) sayfası |
+| GET    | /partials/vpn-clients       | Partial | Client tünel listesi + durum           |
+| POST   | /vpn/client                 | Partial | Yeni client tünel ekle                 |
+| PUT    | /vpn/client/{name}          | Partial | Client tünel düzenle                   |
+| DELETE | /vpn/client/{name}          | Partial | Client tünel sil                       |
+
+### VPN Server (Inbound)
+| Method | Path                            | Tür     | Açıklama                                    |
+|--------|---------------------------------|---------|----------------------------------------------|
+| GET    | /partials/vpn-server            | Partial | Server durumu + peer listesi                 |
+| PUT    | /vpn/server/config              | Partial | Server ayarları (port, subnet, DNS)          |
+| POST   | /vpn/server/toggle              | Partial | Server'ı aç/kapat                            |
+| POST   | /vpn/server/peer                | Partial | Yeni peer ekle (keypair otomatik üret)       |
+| PUT    | /vpn/server/peer/{name}         | Partial | Peer düzenle                                 |
+| DELETE | /vpn/server/peer/{name}         | Partial | Peer sil                                     |
+| GET    | /vpn/server/peer/{name}/config  | Download| Peer client config dosyası indir (.conf)     |
+| GET    | /vpn/server/peer/{name}/qr      | Partial | Peer QR kodu (mobil WireGuard app için)      |
 
 ### Policy-Based Routing (PBR)
 | Method | Path                          | Tür     | Açıklama                              |
@@ -883,7 +919,8 @@ apt install -y \
     iproute2 \
     unbound \
     dnsmasq \
-    rsyslog
+    rsyslog \
+    qrencode                    # WireGuard peer QR kodu üretimi
 
 # dnsmasq: DNS kapalı (port=0), sadece DHCP
 # unbound: recursive DNS resolver + blocklist
@@ -1318,32 +1355,77 @@ Manuel doğrulama:
 - BBR/CUBIC geçişi çalışıyor mu
 - TR/EN dillerinde QoS sayfası metinleri doğru mu
 
-### Phase 8: WireGuard VPN + Policy-Based Routing (7 gün)
-**Hedef:** WireGuard tünelleri, tam kapsamlı policy-based routing motoru (kaynak/hedef/port/domain/zaman), web UI ile yönetim.
+### Phase 8: WireGuard VPN (Client + Server) + Policy-Based Routing (8 gün)
+**Hedef:** WireGuard client tünelleri (dış VPN sunuculara bağlanma), WireGuard server (eve dışarıdan bağlanma — road warrior), tam kapsamlı PBR motoru, web UI ile yönetim.
 
 Oluşturulacak dosyalar:
-- `internal/services/vpn.go` — WireGuard tünel yönetimi
+- `internal/services/vpn.go` — WireGuard client + server yönetimi
 - `internal/services/routing.go` — PBR motoru (kural eşleştirme, nftables entegrasyonu, DNS-based routing)
-- `configs/sysconf/wireguard.conf.tmpl`
+- `configs/sysconf/wireguard-client.conf.tmpl` — Client tünel config template
+- `configs/sysconf/wireguard-server.conf.tmpl` — Server interface config template
 - `configs/defaults/vpn.yaml`
 - `configs/defaults/routing.yaml`
 - `internal/web/handlers/vpn.go`
 - `internal/web/handlers/routing.go`
 - `web/templates/pages/vpn.html`
 - `web/templates/pages/routing.html`
-- `web/templates/partials/vpn_tunnels.html`
+- `web/templates/partials/vpn_clients.html`
+- `web/templates/partials/vpn_server.html`
+- `web/templates/partials/vpn_peer_form.html`
 - `web/templates/partials/policy_list.html`
 - `web/templates/partials/policy_form.html`
 - `web/templates/partials/policy_status.html`
 - `web/static/js/htmx-sortable.js`
 
 Adımlar:
-1. **WireGuard tünel yönetimi:**
+1. **WireGuard client tünel yönetimi (outbound):**
    - Config template: key, endpoint, allowed IPs, DNS
    - Tünel CRUD: `wg-quick up/down wgN`
    - Keypair: `exec.Command("wg", "genkey")` + `wg pubkey`
    - Per-tünel routing table: `ip route add default dev wgN table {table_id}`
-2. **PBR motoru — kural eşleştirme:**
+2. **WireGuard server (inbound — road warrior):**
+   - İlk kurulumda otomatik server keypair üretimi (`wg genkey` + `wg pubkey`)
+   - Server config template: `[Interface]` (listenPort, privateKey, address) + `[Peer]` blokları
+   - Server interface: `wg0-server` (client interface'lerden ayrı namespace: `wg0`, `wg1`... client, `wgs0` server)
+   - Server subnet: `10.10.0.0/24` (LAN'dan ayrı, configurable)
+   - nftables entegrasyonu:
+     - Server peer'lardan LAN'a erişim: `iif wgs0 oif {lan_iface} accept` (forward chain)
+     - Server peer'lardan internete çıkış: `iif wgs0 oif ppp0 accept` + NAT masquerade
+     - Opsiyonel: peer bazında LAN erişim kısıtlaması (sadece belirli IP/subnet)
+   - Peer yönetimi:
+     - Peer ekleme: `wg set wgs0 peer {pubkey} allowed-ips {ip}/32 preshared-key {psk}`
+     - Peer silme: `wg set wgs0 peer {pubkey} remove`
+     - PresharedKey: opsiyonel ama önerilen (quantum-resistance)
+     - Keepalive: peer bazında configurable (NAT traversal)
+     - IP havuzu: server subnet içinden otomatik atama (10.10.0.2, .3, .4...)
+   - **Client config dosyası oluşturma (indirilebilir):**
+     - Peer eklenince Go tarafında client `.conf` dosyası render:
+       ```ini
+       [Interface]
+       PrivateKey = {peer_private_key}
+       Address = 10.10.0.2/32
+       DNS = 10.0.0.1
+       MTU = 1420
+
+       [Peer]
+       PublicKey = {server_public_key}
+       PresharedKey = {psk}
+       Endpoint = {router_wan_ip_or_ddns}:{port}
+       AllowedIPs = 0.0.0.0/0    # Full tunnel
+       # AllowedIPs = 10.0.0.0/24  # Split tunnel (sadece LAN)
+       ```
+     - İki mod: full tunnel (tüm trafik router üzerinden) veya split tunnel (sadece LAN'a erişim)
+     - İndirme: `GET /vpn/server/peer/{name}/config` → `.conf` dosyası
+   - **QR kodu (mobil cihazlar için):**
+     - Go'da QR üretimi: `go-qrcode` kütüphanesi veya `exec.Command("qrencode")`
+     - Client config string → QR PNG → base64 → `<img>` tag ile web UI'da göster
+     - WireGuard mobil app: QR kodu okut → tek tıkla bağlan
+   - **Endpoint adresi:**
+     - Router'ın WAN IP'si: ppp0 interface'den oku
+     - DDNS desteği: configurable hostname (ör: `ev.example.com`)
+     - Port forwarding notu: ISP modem bridge modda değilse 51820 port forwarding gerekir
+   - Agent operations: `vpn.server.up`, `vpn.server.down`, `vpn.server.reload`
+3. **PBR motoru — kural eşleştirme:**
    - `routing.yaml`'dan politika kurallarını yükle
    - Her politikayı nftables kuralına çevir:
      - Kaynak eşleştirme: `ip saddr {device_ip}` veya `ether saddr {mac}`
@@ -1353,42 +1435,52 @@ Adımlar:
    - fwmark atama: `meta mark set {fwmark}`
    - `ip rule add fwmark {mark} lookup {table_id} priority {prio}`
    - `ct mark` ile reply paketlerde fwmark korunması
-3. **Domain-based routing:**
+4. **Domain-based routing:**
    - Politikadaki domain listesi → Unbound'a `local-zone` + `local-data` hook
    - DNS yanıtından çözümlenen IP'leri yakala (unbound-control dump_cache parse)
    - nftables named set: `nft add element inet filter pbr_{policy_name} { resolved_ip }`
    - Kural: `ip daddr @pbr_{policy_name} meta mark set {fwmark}`
    - Goroutine: TTL bazlı set temizleme + yeni sorgu ile refresh
-4. **nftables PBR chain:**
+5. **nftables PBR chain:**
    - `chain pbr_policies` — priority sırasıyla kural zinciri
    - Firewall template güncelleme: PBR chain'i forward chain'e entegre
-5. **Kill switch:** VPN tünel down → ilgili politikadaki cihazların trafiğini engelle
-6. **Startup restore:** `routing.yaml` + `vpn.yaml`'dan tünel + tüm politika kurallarını kur
-7. **Web UI — VPN sayfası (HTMX):**
-   - Tünel listesi: durum, handshake, transfer bilgisi
-   - Tünel CRUD formu
-8. **Web UI — PBR sayfası (HTMX):**
+6. **Kill switch:** VPN client tünel down → ilgili politikadaki cihazların trafiğini engelle
+7. **Startup restore:** `routing.yaml` + `vpn.yaml`'dan client tünel + server + tüm politika kurallarını kur
+8. **Web UI — VPN sayfası (HTMX):**
+   - İki tab/section: **Client Tünelleri** + **VPN Server**
+   - Client: tünel listesi (durum, handshake, transfer), CRUD formu
+   - Server: açma/kapama toggle, dinleme portu, subnet, peer listesi
+   - Peer kartı: isim, IP, son handshake, transfer, durum (online/offline)
+   - Peer ekleme formu: isim gir → keypair + psk + IP otomatik üret → config indir/QR göster
+   - Config indirme butonu (`.conf` dosyası) + QR kodu görüntüleme (mobil için)
+   - Tunnel mode seçimi: full tunnel / split tunnel (peer bazında)
+9. **Web UI — PBR sayfası (HTMX):**
    - Politika listesi: sürükle-bırak ile priority sıralama (`htmx-sortable.js`)
    - Politika ekleme/düzenleme formu:
      - Kaynak: cihaz dropdown (DHCP lease'lerden) veya CIDR input
      - Hedef: IP/CIDR input veya domain listesi (textarea, wildcard destekli)
      - Port/protokol: input + TCP/UDP/any seçimi
      - Zaman: schedule picker (başlangıç-bitiş saat + gün seçimi)
-     - Action: dropdown (wan, tünel isimleri, drop)
+     - Action: dropdown (wan, client tünel isimleri, drop)
    - Enable/disable toggle
    - Canlı eşleşme durumu: SSE ile hangi cihaz hangi politikaya eşleşiyor
-9. **i18n:** `{{ t .Lang "vpn.*" }}` ve `{{ t .Lang "routing.*" }}` ile tüm UI metinleri
+10. **i18n:** `{{ t .Lang "vpn.*" }}` ve `{{ t .Lang "routing.*" }}` ile tüm UI metinleri
 
 Manuel doğrulama:
-- `wg show` → tünel aktif mi, handshake var mı
-- **Kaynak bazlı:** Xbox'a politika ata → VPN'den çıkıyor mu, diğer cihazlar direkt mi
+- **Client:** `wg show wg0` → client tünel aktif mi, handshake var mı
+- **Server:** `wg show wgs0` → server dinliyor mu, peer listesi doğru mu
+- **Road warrior:** telefondan QR okut → WireGuard app ile bağlan → LAN'daki cihazlara erişebiliyor mu
+- **Client config indirme:** `.conf` dosyasını laptop'ta import et → bağlantı kurulabiliyor mu
+- **Full vs split tunnel:** full tunnel'da tüm trafik router üzerinden mi, split tunnel'da sadece LAN mı
+- **Firewall:** VPN server peer'ları LAN'a erişebiliyor mu, internet çıkışı çalışıyor mu
+- **Kaynak bazlı PBR:** Xbox'a politika ata → VPN'den çıkıyor mu, diğer cihazlar direkt mi
 - **Hedef IP bazlı:** 1.2.3.0/24'e giden trafik → belirtilen tünelden çıkıyor mu
 - **Domain bazlı:** netflix.com politikası → `dig netflix.com`, çözümlenen IP VPN'den mi
 - **Port bazlı:** UDP 3478 → direkt, geri kalan → VPN
 - **Zaman bazlı:** schedule aktifken VPN, schedule dışında direkt
 - **Kombinasyon:** Xbox + UDP gaming portları → direkt, Xbox geri kalan → VPN
 - **Priority:** yüksek öncelikli kural düşük öncelikliden önce uygulanıyor mu
-- **Kill switch:** tünel down → ilgili cihaz internetsiz mi
+- **Kill switch:** client tünel down → ilgili cihaz internetsiz mi
 - **Sürükle-bırak:** politika sıralaması değiştirince priority güncelleniyor mu
 - TR/EN dillerinde VPN ve routing sayfası metinleri doğru mu
 
@@ -1546,6 +1638,8 @@ firewallSvc.Apply(rules)
 | Go binary update sırasında downtime    | systemd: `ExecStartPre` ile binary swap, graceful shutdown             |
 | HTMX: full page refresh gerekebilir   | `hx-boost` ile link'leri HTMX'e çevir, minimal JS fallback            |
 | Health check reboot döngüsü           | Cooldown süresi + max reboot count/24h limiti + reboot sonrası grace period |
+| VPN server private key sızması        | AES-256-GCM at rest, peer config indirmede one-time token, QR timeout       |
+| VPN server WAN IP değişimi (PPPoE)    | DDNS desteği (configurable hostname), ip-up script ile DDNS güncelleme      |
 
 ## Tahmini Toplam Süre
 
@@ -1558,8 +1652,8 @@ firewallSvc.Apply(rules)
 | 5     | Unbound DNS + dnsmasq DHCP            | 3   | 18        |
 | 6     | Dashboard + SSE                       | 3   | 21        |
 | 7     | SQM/QoS                               | 3   | 24        |
-| 8     | WireGuard VPN + Policy-Based Routing  | 7   | 31        |
-| 9     | Samba NAS + M3U                       | 3   | 34        |
-| 10    | Storage + Syslog + Backup + Hardening | 4   | 38        |
+| 8     | WireGuard VPN (Client+Server) + PBR   | 8   | 32        |
+| 9     | Samba NAS + M3U                       | 3   | 35        |
+| 10    | Storage + Syslog + Backup + Hardening | 4   | 39        |
 
-**Toplam: ~38 geliştirme günü** (tek geliştirici, her gün 4-6 saat efektif çalışma varsayımı)
+**Toplam: ~39 geliştirme günü** (tek geliştirici, her gün 4-6 saat efektif çalışma varsayımı)
