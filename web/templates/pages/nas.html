@@ -54,6 +54,23 @@
             </button>
         </div>
         {{ template "m3u-status" . }}
+
+        <!-- Group Discovery + Filter -->
+        <div style="margin-top:var(--space-lg); padding-top:var(--space-md); border-top:1px solid var(--border-color);">
+            <div class="card-title" style="margin-bottom:var(--space-md);">{{ t $.Lang "nas.m3u.includeGroups" }}</div>
+            <form style="display:flex; gap:var(--space-sm); margin-bottom:var(--space-md);">
+                <input class="input" name="url" placeholder="http://example.com/playlist.m3u" style="flex:1;" id="m3u-discover-url">
+                <button type="button" class="btn btn-secondary btn-sm"
+                        hx-post="/nas/m3u/discover-groups"
+                        hx-include="#m3u-discover-url"
+                        hx-target="#m3u-groups-list">
+                    {{ t $.Lang "nas.m3u.discoverGroups" }}
+                </button>
+            </form>
+            <div id="m3u-groups-list" style="max-height:300px; overflow-y:auto; padding:var(--space-sm); border:1px solid var(--border-color); border-radius:var(--radius-md);">
+                <span style="color:var(--text-secondary); font-size:var(--font-sm);">{{ t $.Lang "nas.m3u.allGroups" }}</span>
+            </div>
+        </div>
     </div>
 
     {{ end }}
