@@ -369,11 +369,11 @@ Go Web UI → unbound-control stats → DNS istatistikleri
 Tam dual-stack: IPv4 ve IPv6 paralel çalışır, NAT66 **yapılmaz**.
 
 ```
-ISP (PPPoE) ─── IPv4: NAT masquerade (10.0.0.0/24 → WAN IP)
+ISP (PPPoE) ─── IPv4: NAT masquerade (10.10.10.0/24 → WAN IP)
              └── IPv6: DHCPv6-PD ile global prefix → LAN'a doğrudan dağıtım (NAT yok)
 
 LAN cihazı:
-  IPv4: 10.0.0.x (SNAT/masquerade ile internete çıkış)
+  IPv4: 10.10.10.x (SNAT/masquerade ile internete çıkış)
   IPv6: 2001:db8:1::x (global unicast, doğrudan internete çıkış)
         fd00:abcd:1234::x (ULA, ISP prefix olmasa bile LAN içi IPv6)
 ```
@@ -680,7 +680,7 @@ system:
   adminPasswordHash: "$2a$12$..."       # bcrypt
   sessionSecret: "..."                   # 32-byte hex, cookie signing
   webPort: 8443
-  webBind: "10.0.0.1"                   # Sadece LAN
+  webBind: "10.10.10.1"                   # Sadece LAN
   tls:
     mode: "self-signed"                  # self-signed | acme | mkcert
     certFile: ""                         # Custom sertifika yolu (boş = otomatik)
@@ -690,7 +690,7 @@ system:
       validDays: 3650                    # Geçerlilik süresi (10 yıl)
       sans:                              # Subject Alternative Names
         - "home-router.lan"
-        - "10.0.0.1"
+        - "10.10.10.1"
         - "router.local"
     acme:                                  # Let's Encrypt (ACME)
       enabled: false
@@ -717,7 +717,7 @@ interfaces:
     label: "Ev Ağı"
     role: "lan"
     type: "static"
-    address: "10.0.0.1/24"
+    address: "10.10.10.1/24"
     address6: ""                         # DHCPv6-PD prefix'den otomatik atanır (ör: 2001:db8:1::1/64)
     mtu: 1500
     mac: "aa:bb:cc:dd:ee:02"
@@ -737,13 +737,13 @@ vlans:                                     # 802.1Q VLAN tanımları
     label: "Misafir Ağı"
     role: "lan"
     type: "static"
-    address: "10.0.100.1/24"              # Ayrı subnet
+    address: "10.10.13.1/24"              # Ayrı subnet
     mtu: 1500
     isolated: true                         # Ana LAN'dan izole (inter-VLAN routing yok)
     dhcp:                                  # Bu VLAN için ayrı DHCP havuzu
       enabled: true
-      rangeStart: "10.0.100.100"
-      rangeEnd: "10.0.100.250"
+      rangeStart: "10.10.13.100"
+      rangeEnd: "10.10.13.250"
       leaseTime: "6h"
 
 healthCheck:
@@ -831,14 +831,14 @@ dns:
     logBlocked: true                     # Engellenen sorguları ayrıca işaretle
 
 dhcp:
-  rangeStart: "10.0.0.100"
-  rangeEnd: "10.0.0.250"
+  rangeStart: "10.10.10.100"
+  rangeEnd: "10.10.10.250"
   leaseTime: "12h"
-  gateway: "10.0.0.1"
-  dnsServer: "10.0.0.1"                  # Unbound'a yönlendir
+  gateway: "10.10.10.1"
+  dnsServer: "10.10.10.1"                  # Unbound'a yönlendir
   staticLeases:
     - mac: "aa:bb:cc:dd:ee:ff"
-      ip: "10.0.0.10"
+      ip: "10.10.10.10"
       hostname: "desktop"
 
 ipv6:
@@ -864,7 +864,7 @@ vpn:
       privateKey: "..."                  # .credentials.enc
       publicKey: "..."
       allowedIPs: "0.0.0.0/0, ::/0"       # Dual-stack full tunnel
-      dns: "10.0.0.1"
+      dns: "10.10.10.1"
       table: 100
       fwmark: 100
   server:                                  # Inbound VPN server (eve dışarıdan bağlanma)
@@ -872,9 +872,9 @@ vpn:
     listenPort: 51820
     privateKey: "..."                    # .credentials.enc (ilk kurulumda otomatik üretilir)
     publicKey: "..."
-    address: "10.10.0.1/24"             # VPN server subnet (IPv4)
+    address: "10.10.11.1/24"             # VPN server subnet (IPv4)
     address6: "fd10:10::1/64"           # VPN server subnet (IPv6 ULA)
-    dns: "10.0.0.1"                     # Client'lara verilecek DNS
+    dns: "10.10.10.1"                     # Client'lara verilecek DNS
     postUp: ""                          # Opsiyonel custom komut
     postDown: ""
     mtu: 1420                           # PPPoE altı: 1492 - 60 (WG overhead) - 12 (margin)
@@ -882,12 +882,12 @@ vpn:
       - name: "telefon"
         publicKey: "..."
         presharedKey: "..."              # .credentials.enc (opsiyonel, ekstra güvenlik)
-        allowedIPs: "10.10.0.2/32"      # Peer'a atanan IP
+        allowedIPs: "10.10.11.2/32"      # Peer'a atanan IP
         keepalive: 25                    # NAT traversal (saniye, 0=kapalı)
       - name: "laptop"
         publicKey: "..."
         presharedKey: "..."
-        allowedIPs: "10.10.0.3/32"
+        allowedIPs: "10.10.11.3/32"
         keepalive: 25
   deviceAssignments:
     "aa:bb:cc:dd:ee:ff": "nl-amsterdam"
@@ -906,9 +906,9 @@ openvpn:
     protocol: "udp"                      # udp | tcp
     port: 1194
     device: "tun"                        # tun | tap
-    subnet: "10.20.0.0/24"              # VPN server subnet (IPv4)
+    subnet: "10.10.12.0/24"              # VPN server subnet (IPv4)
     subnet6: "fd20:20::/64"             # VPN server subnet (IPv6 ULA)
-    dns: "10.0.0.1"
+    dns: "10.10.10.1"
     cipher: "AES-256-GCM"
     auth: "SHA256"
     tlsAuth: true                        # tls-auth HMAC (ekstra güvenlik katmanı)
@@ -920,7 +920,7 @@ openvpn:
     clients:                             # Sertifika bazlı client tanımları
       - name: "is-laptop"
         commonName: "is-laptop"          # Sertifika CN
-        fixedIP: "10.20.0.2"             # Sabit IP (opsiyonel, boş = havuzdan)
+        fixedIP: "10.10.12.2"             # Sabit IP (opsiyonel, boş = havuzdan)
         enabled: true
       - name: "tablet"
         commonName: "tablet"
@@ -965,7 +965,7 @@ syslog:
 ntp:
   server:
     enabled: true                        # LAN cihazlarına NTP sunuculuğu
-    listenAddress: "10.0.0.1"            # Sadece LAN interface
+    listenAddress: "10.10.10.1"            # Sadece LAN interface
     listenPort: 123
   client:
     enabled: true                        # Router'ın kendi zaman senkronizasyonu
@@ -977,8 +977,8 @@ ntp:
     fallback: "time.google.com"          # Pool'lar ulaşılamaz ise
   rtcSync: true                          # Sistem saatini RTC'ye yaz (hwclock)
   allowSubnets:                          # NTP sunucuya erişim izni
-    - "10.0.0.0/24"                      # LAN
-    - "10.10.0.0/24"                     # VPN server peer'ları
+    - "10.10.10.0/24"                      # LAN
+    - "10.10.11.0/24"                     # VPN server peer'ları
 
 storage:
   raid:
@@ -1478,8 +1478,8 @@ Adımlar:
 
 Manuel doğrulama:
 - **TLS self-signed:** ilk başlatmada sertifika otomatik üretildi mi (`/var/lib/home-router/tls/`)
-- `curl -k https://10.0.0.1:8443/login` → login sayfası dönüyor mu
-- **TLS protokol:** `openssl s_client -connect 10.0.0.1:8443` → TLS 1.2+ kullanılıyor mu
+- `curl -k https://10.10.10.1:8443/login` → login sayfası dönüyor mu
+- **TLS protokol:** `openssl s_client -connect 10.10.10.1:8443` → TLS 1.2+ kullanılıyor mu
 - **mkcert:** mod değiştir → mkcert ile sertifika üret → CA indir → tarayıcıda uyarı yok mu
 - **TLS settings:** sertifika durumu (expire tarihi, mod) doğru gösteriliyor mu
 - Yanlış şifre → login sayfasında hata mesajı (HTMX swap), dile uygun mesaj
@@ -1723,10 +1723,10 @@ Adımlar:
    - Zamanlanmış güncelleme (goroutine ticker)
 3. **dnsmasq config template:**
    - `port=0` (DNS kapalı, sadece DHCP)
-   - `dhcp-range=10.0.0.100,10.0.0.250,12h`
-   - `dhcp-option=option:router,10.0.0.1`
-   - `dhcp-option=option:dns-server,10.0.0.1` (Unbound'a yönlendir)
-   - Statik lease'ler: `dhcp-host=aa:bb:cc:dd:ee:ff,10.0.0.10,desktop`
+   - `dhcp-range=10.10.10.100,10.10.10.250,12h`
+   - `dhcp-option=option:router,10.10.10.1`
+   - `dhcp-option=option:dns-server,10.10.10.1` (Unbound'a yönlendir)
+   - Statik lease'ler: `dhcp-host=aa:bb:cc:dd:ee:ff,10.10.10.10,desktop`
    - **IPv6 SLAAC/RA (dnsmasq):**
      - `enable-ra` — Router Advertisement gönderimi etkinleştir
      - `dhcp-range=::,constructor:lan,ra-only,64,12h` — SLAAC modu (stateless, adres RA ile dağıtılır)
@@ -1739,7 +1739,7 @@ Adımlar:
 5. **DNS istatistikleri:** `unbound-control stats_noreset` → cache hits, misses, query count
 6. **DNS Query Logging:**
    - Unbound config: `log-queries: yes`, `verbosity: 2`, `logfile:` → `/var/log/unbound/queries.log`
-   - Log formatı: `[timestamp] unbound: info: 10.0.0.15 google.com. A IN` şeklinde satır bazlı
+   - Log formatı: `[timestamp] unbound: info: 10.10.10.15 google.com. A IN` şeklinde satır bazlı
    - Go'da log dosyasını tail-parse eden goroutine:
      - Her satırı parse et: timestamp, client IP, domain, query type (A/AAAA/CNAME/...), durum (NOERROR/REFUSED/NXDOMAIN)
      - DHCP lease ile eşleştir: IP → hostname/MAC (hangi cihaz sorgulamış)
@@ -1762,8 +1762,8 @@ Adımlar:
 11. **i18n:** Tüm template metinleri `{{ t .Lang "dns.*" }}` ve `{{ t .Lang "dhcp.*" }}` ile
 
 Manuel doğrulama:
-- `dig @10.0.0.1 google.com` → Unbound recursive çözümleme çalışıyor mu
-- `dig @10.0.0.1 ads.example.com` → blocklist engelleme çalışıyor mu (REFUSED)
+- `dig @10.10.10.1 google.com` → Unbound recursive çözümleme çalışıyor mu
+- `dig @10.10.10.1 ads.example.com` → blocklist engelleme çalışıyor mu (REFUSED)
 - DHCP: yeni cihaz IP alıyor mu, lease tablosunda görünüyor mu
 - Statik lease ekle/sil çalışıyor mu
 - `unbound-control stats_noreset` → istatistikler web UI'da doğru mu
@@ -1874,7 +1874,7 @@ Adımlar:
    - İlk kurulumda otomatik server keypair üretimi (`wg genkey` + `wg pubkey`)
    - Server config template: `[Interface]` (listenPort, privateKey, address) + `[Peer]` blokları
    - Server interface: `wg0-server` (client interface'lerden ayrı namespace: `wg0`, `wg1`... client, `wgs0` server)
-   - Server subnet: `10.10.0.0/24` + `fd10:10::0/64` ULA (LAN'dan ayrı, configurable)
+   - Server subnet: `10.10.11.0/24` + `fd10:10::0/64` ULA (LAN'dan ayrı, configurable)
    - nftables entegrasyonu:
      - Server peer'lardan LAN'a erişim: `iif wgs0 oif {lan_iface} accept` (forward chain)
      - Server peer'lardan internete çıkış: `iif wgs0 oif ppp0 accept` + NAT masquerade
@@ -1884,14 +1884,14 @@ Adımlar:
      - Peer silme: `wg set wgs0 peer {pubkey} remove`
      - PresharedKey: opsiyonel ama önerilen (quantum-resistance)
      - Keepalive: peer bazında configurable (NAT traversal)
-     - IP havuzu: server subnet içinden otomatik atama (10.10.0.2, .3, .4...)
+     - IP havuzu: server subnet içinden otomatik atama (10.10.11.2, .3, .4...)
    - **Client config dosyası oluşturma (indirilebilir):**
      - Peer eklenince Go tarafında client `.conf` dosyası render:
        ```ini
        [Interface]
        PrivateKey = {peer_private_key}
-       Address = 10.10.0.2/32, fd10:10::2/128
-       DNS = 10.0.0.1
+       Address = 10.10.11.2/32, fd10:10::2/128
+       DNS = 10.10.10.1
        MTU = 1420
 
        [Peer]
@@ -1899,7 +1899,7 @@ Adımlar:
        PresharedKey = {psk}
        Endpoint = {router_wan_ip_or_ddns}:{port}
        AllowedIPs = 0.0.0.0/0, ::/0    # Full tunnel (dual-stack)
-       # AllowedIPs = 10.0.0.0/24, fd00:abcd:1234::/48  # Split tunnel (sadece LAN)
+       # AllowedIPs = 10.10.10.0/24, fd00:abcd:1234::/48  # Split tunnel (sadece LAN)
        ```
      - İki mod: full tunnel (tüm trafik router üzerinden) veya split tunnel (sadece LAN'a erişim)
      - İndirme: `GET /vpn/server/peer/{name}/config` → `.conf` dosyası
@@ -1941,10 +1941,10 @@ Adımlar:
      key /etc/openvpn/pki/private/server.key
      dh /etc/openvpn/pki/dh.pem
      tls-auth /etc/openvpn/pki/ta.key 0
-     server 10.20.0.0 255.255.255.0
+     server 10.10.12.0 255.255.255.0
      server-ipv6 fd20:20::/64               # IPv6 dual-stack VPN subnet
      push "redirect-gateway def1 ipv6"      # Full tunnel (dual-stack)
-     push "dhcp-option DNS 10.0.0.1"
+     push "dhcp-option DNS 10.10.10.1"
      cipher AES-256-GCM
      auth SHA256
      keepalive 10 120
@@ -2112,7 +2112,7 @@ Adımlar:
 9. **NTP sunucu (chrony):**
    - chrony config template render:
      - Client modu: `server 0.tr.pool.ntp.org iburst` (upstream NTP kaynakları)
-     - Server modu: `allow 10.0.0.0/24` + `allow 10.10.0.0/24` (LAN + VPN peer'ları)
+     - Server modu: `allow 10.10.10.0/24` + `allow 10.10.11.0/24` (LAN + VPN peer'ları)
      - `local stratum 10` — upstream'ler ulaşılamaz olsa bile LAN'a zaman servisi ver
      - `rtcsync` — sistem saatini RTC'ye yaz
      - `makestep 1.0 3` — ilk senkronizasyonda büyük fark varsa anında düzelt
@@ -2120,7 +2120,7 @@ Adımlar:
    - `chronyc tracking` parse: son senkronizasyon, drift, stratum
    - Agent ops: `ntp.reload` (systemctl reload chronyd), `ntp.force_sync` (chronyc makestep)
    - nftables entegrasyonu: UDP 123 sadece LAN + VPN subnet'ten kabul (input chain)
-   - DHCP entegrasyonu: dnsmasq config'e `dhcp-option=option:ntp-server,10.0.0.1` ekle
+   - DHCP entegrasyonu: dnsmasq config'e `dhcp-option=option:ntp-server,10.10.10.1` ekle
      → LAN cihazları DHCP ile otomatik olarak router'ı NTP sunucu olarak alır
    - Web UI: senkronizasyon durumu (offset, stratum, kaynak listesi), upstream değiştirme, force sync butonu
 10. Agent ops: `syslog.reload` (systemctl reload rsyslog)
@@ -2131,10 +2131,10 @@ Manuel doğrulama:
 - RAID durumu doğru gösteriliyor mu
 - Config export → factory reset → import → çalışıyor mu
 - Güvenlik header'ları mevcut mu (`curl -I`)
-- **Syslog sunucu:** başka cihazdan `logger -n 10.0.0.1 "test"` → log görünüyor mu
+- **Syslog sunucu:** başka cihazdan `logger -n 10.10.10.1 "test"` → log görünüyor mu
 - **Syslog client:** router logları harici sunucuya iletiliyor mu
 - **Syslog Web UI:** host filtresi, severity filtresi, pagination çalışıyor mu
-- **NTP sunucu:** LAN cihazından `ntpdate -q 10.0.0.1` → zaman sorgulanabiliyor mu
+- **NTP sunucu:** LAN cihazından `ntpdate -q 10.10.10.1` → zaman sorgulanabiliyor mu
 - **NTP client:** `chronyc tracking` → upstream'e senkronize mi, offset düşük mü
 - **NTP DHCP:** LAN cihazı DHCP ile NTP sunucu adresi alıyor mu (`dhclient -v`)
 - **NTP Web UI:** kaynak listesi, offset, stratum doğru gösteriliyor mu, force sync çalışıyor mu
