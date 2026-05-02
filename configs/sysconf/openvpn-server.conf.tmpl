@@ -1,0 +1,46 @@
+port {{ .Port }}
+proto {{ .Protocol }}
+dev {{ .Device }}
+
+ca /etc/openvpn/pki/ca.crt
+cert /etc/openvpn/pki/issued/server.crt
+key /etc/openvpn/pki/private/server.key
+dh /etc/openvpn/pki/dh.pem
+{{- if .TLSAuth }}
+tls-auth /etc/openvpn/pki/ta.key 0
+{{- end }}
+
+server {{ .SubnetIP }} {{ .SubnetMask }}
+{{- if .Subnet6 }}
+server-ipv6 {{ .Subnet6 }}
+push "redirect-gateway def1 ipv6"
+{{- else }}
+push "redirect-gateway def1"
+{{- end }}
+push "dhcp-option DNS {{ .DNS }}"
+
+cipher {{ .Cipher }}
+auth {{ .Auth }}
+keepalive {{ .Keepalive }}
+
+{{- if not .Compression }}
+compress
+{{- end }}
+{{- if not .ClientToClient }}
+;client-to-client
+{{- end }}
+{{- if not .DuplicateCN }}
+;duplicate-cn
+{{- end }}
+
+max-clients {{ .MaxClients }}
+persist-key
+persist-tun
+
+status /var/log/openvpn-status.log
+log-append /var/log/openvpn.log
+verb 3
+
+crl-verify /etc/openvpn/pki/crl.pem
+
+management /var/run/openvpn-mgmt.sock unix

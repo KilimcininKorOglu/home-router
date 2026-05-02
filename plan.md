@@ -2108,14 +2108,14 @@ Adımlar:
      - DDNS desteği: configurable hostname (ör: `ev.example.com`)
      - Port forwarding notu: ISP modem bridge modda değilse 51820 port forwarding gerekir
    - Agent operations: `vpn.server.up`, `vpn.server.down`, `vpn.server.reload`
-3. **OpenVPN client (outbound):**
+3. ✅ **OpenVPN client (outbound):**
    - `.ovpn` dosya import: web UI'dan dosya yükle → config parse + validate → kaydet
    - `openvpn --config {file} --daemon` ile bağlantı başlat
    - Auth-user-pass desteği: username/password `.credentials.enc`'de saklanır
    - Durum izleme: `openvpn --management` socket veya log parse → connected/disconnected/error
    - PBR entegrasyonu: OpenVPN client da fwmark + routing table ile policy routing'e dahil
    - Agent operations: `openvpn.client.connect`, `openvpn.client.disconnect`
-4. **OpenVPN server (inbound):**
+4. ✅ **OpenVPN server (inbound):**
    - **PKI altyapısı (easy-rsa wrapper):**
      - `easyrsa init-pki` → `/etc/openvpn/pki/` dizini oluştur
      - `easyrsa build-ca nopass` → CA sertifikası
