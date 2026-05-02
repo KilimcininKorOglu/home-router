@@ -370,6 +370,7 @@ type Config struct {
     DNS        DNSConfig        `yaml:"dns"`
     DHCP       DHCPConfig       `yaml:"dhcp"`
     VPN        VPNConfig        `yaml:"vpn"`
+    OpenVPN    OpenVPNConfig    `yaml:"openvpn"`
     Routing    RoutingConfig    `yaml:"routing"`
     NAS        NASConfig        `yaml:"nas"`
     Syslog     SyslogConfig     `yaml:"syslog"`
@@ -416,6 +417,7 @@ home-router/
 │   │       ├── dhcp.go           # dnsmasq DHCP lease yönetimi
 │   │       ├── qos.go            # SQM/QoS profilleri
 │   │       ├── vpn.go            # WireGuard tünel yönetimi
+│   │       ├── openvpn.go       # OpenVPN server/client handler'ları
 │   │       ├── routing.go       # Policy-based routing kuralları (CRUD + sıralama)
 │   │       ├── nas.go            # Samba paylaşımları
 │   │       ├── storage.go        # RAID durumu, disk sağlığı
@@ -430,6 +432,7 @@ home-router/
 │   │   ├── dhcp.go               # dnsmasq config yönetimi + lease parse
 │   │   ├── qos.go                # tc + CAKE qdisc yönetimi
 │   │   ├── vpn.go                # WireGuard tunnel yönetimi
+│   │   ├── openvpn.go            # OpenVPN server + client yönetimi + PKI
 │   │   ├── routing.go            # Policy-based routing motoru (PBR)
 │   │   ├── nas.go                # Samba config + M3U parser
 │   │   ├── storage.go            # mdadm + smartctl
@@ -459,6 +462,7 @@ home-router/
 │   │   │   ├── network.html
 │   │   │   ├── firewall.html
 │   │   │   ├── vpn.html
+│   │   │   ├── openvpn.html      # OpenVPN server + client yönetimi
 │   │   │   ├── routing.html      # Policy-based routing yönetimi
 │   │   │   ├── dns.html
 │   │   │   ├── dhcp.html
@@ -476,9 +480,12 @@ home-router/
 │   │       ├── lease_table.html  # DHCP lease tablosu (HTMX swap)
 │   │       ├── dns_querylog.html # DNS sorgu geçmişi (filtre + pagination)
 │   │       ├── fw_rules.html     # Firewall kural listesi
-│   │       ├── vpn_clients.html   # Client tünel listesi + durum
-│   │       ├── vpn_server.html   # Server durumu + peer listesi + QR
-│   │       ├── vpn_peer_form.html# Peer ekleme/düzenleme formu
+│   │       ├── vpn_clients.html   # WG client tünel listesi + durum
+│   │       ├── vpn_server.html   # WG server durumu + peer listesi + QR
+│   │       ├── vpn_peer_form.html# WG peer ekleme/düzenleme formu
+│   │       ├── ovpn_clients.html # OpenVPN client listesi + durum
+│   │       ├── ovpn_server.html  # OpenVPN server durumu + client listesi
+│   │       ├── ovpn_client_form.html # OpenVPN client sertifika oluşturma
 │   │       ├── vpn_panel.html    # VPN cihaz atama paneli (PBR entegrasyonu)
 │   │       ├── vpn_device.html   # Tekil cihaz kartı (draggable)
 │   │       ├── policy_list.html  # PBR politika listesi (sürükle-bırak sıralama)
@@ -518,6 +525,8 @@ home-router/
 │   │   ├── rsyslog.conf.tmpl    # rsyslog sunucu/client config
 │   │   ├── chrony.conf.tmpl     # chrony NTP sunucu/client config
 │   │   ├── wireguard.conf.tmpl  # WireGuard interface config
+│   │   ├── openvpn-server.conf.tmpl # OpenVPN server config
+│   │   ├── openvpn-client.conf.tmpl # OpenVPN client config
 │   │   └── smb.conf.tmpl         # Samba paylaşım config
 │   └── defaults/
 │       ├── router.yaml           # Varsayılan ana config
@@ -726,6 +735,41 @@ vpn:
   deviceAssignments:
     "aa:bb:cc:dd:ee:ff": "nl-amsterdam"
 
+openvpn:
+  clients:                                 # Outbound OpenVPN client bağlantıları
+    - name: "work-vpn"
+      configFile: ""                     # .ovpn dosya içeriği (import ile yüklenir)
+      username: "..."                    # .credentials.enc (opsiyonel, auth-user-pass)
+      password: "..."
+      autoConnect: false                 # Başlangıçta otomatik bağlan
+      table: 200                         # PBR routing table
+      fwmark: 200
+  server:
+    enabled: false
+    protocol: "udp"                      # udp | tcp
+    port: 1194
+    device: "tun"                        # tun | tap
+    subnet: "10.20.0.0/24"              # VPN server subnet
+    dns: "10.0.0.1"
+    cipher: "AES-256-GCM"
+    auth: "SHA256"
+    tlsAuth: true                        # tls-auth HMAC (ekstra güvenlik katman��)
+    compression: false                   # Güvenlik riski — varsayılan kapalı
+    maxClients: 10
+    keepalive: "10 120"                  # ping 10, ping-restart 120
+    clientToClient: false                # Client'lar arası trafik
+    duplicateCn: false                   # Aynı CN ile çoklu bağlantı
+    clients:                             # Sertifika bazlı client tanımları
+      - name: "is-laptop"
+        commonName: "is-laptop"          # Sertifika CN
+        fixedIP: "10.20.0.2"             # Sabit IP (opsiyonel, boş = havuzdan)
+        enabled: true
+      - name: "tablet"
+        commonName: "tablet"
+        fixedIP: ""
+        enabled: true
+    ccd: {}                              # Client-specific config override (opsiyonel)
+
 nas:
   shares:
     - name: "media"
@@ -898,6 +942,29 @@ Go'da HTMX ile iki tür endpoint var: **sayfa** (tam HTML) ve **partial** (HTML 
 | GET    | /vpn/server/peer/{name}/config  | Download| Peer client config dosyası indir (.conf)     |
 | GET    | /vpn/server/peer/{name}/qr      | Partial | Peer QR kodu (mobil WireGuard app için)      |
 
+### OpenVPN Client (Outbound)
+| Method | Path                              | Tür      | Açıklama                                     |
+|--------|-----------------------------------|----------|-----------------------------------------------|
+| GET    | /openvpn                          | Sayfa    | OpenVPN yönetimi (client + server) sayfası    |
+| GET    | /partials/ovpn-clients            | Partial  | Client bağlantı listesi + durum               |
+| POST   | /openvpn/client                   | Partial  | Yeni client ekle (.ovpn dosya import)         |
+| DELETE | /openvpn/client/{name}            | Partial  | Client bağlantı sil                           |
+| POST   | /openvpn/client/{name}/connect    | Partial  | Client bağlantısını başlat                    |
+| POST   | /openvpn/client/{name}/disconnect | Partial  | Client bağlantısını kes                       |
+
+### OpenVPN Server (Inbound)
+| Method | Path                                   | Tür      | Açıklama                                  |
+|--------|----------------------------------------|----------|---------------------------------------------|
+| GET    | /partials/ovpn-server                  | Partial  | Server durumu + client listesi              |
+| PUT    | /openvpn/server/config                 | Partial  | Server ayarları (port, protocol, cipher)    |
+| POST   | /openvpn/server/toggle                 | Partial  | Server'ı aç/kapat                           |
+| POST   | /openvpn/server/init-pki               | Partial  | PKI altyapısı oluştur (CA + server cert)    |
+| POST   | /openvpn/server/client                 | Partial  | Yeni client sertifikası oluştur             |
+| DELETE | /openvpn/server/client/{name}          | Partial  | Client sertifikasını revoke et              |
+| POST   | /openvpn/server/client/{name}/toggle   | Partial  | Client'ı etkinleştir/devre dışı bırak       |
+| GET    | /openvpn/server/client/{name}/config   | Download | Client .ovpn config dosyası indir           |
+| GET    | /openvpn/server/client/{name}/qr       | Partial  | Client config QR kodu (mobil app için)      |
+
 ### Policy-Based Routing (PBR)
 | Method | Path                          | Tür     | Açıklama                              |
 |--------|-------------------------------|---------|----------------------------------------|
@@ -991,6 +1058,7 @@ apt install -y \
     ppp pppoe \
     nftables \
     wireguard-tools \
+    openvpn easy-rsa \
     samba samba-common-bin \
     smartmontools mdadm \
     iproute2 \
@@ -1491,23 +1559,31 @@ Manuel doğrulama:
 - BBR/CUBIC geçişi çalışıyor mu
 - TR/EN dillerinde QoS sayfası metinleri doğru mu
 
-### Phase 8: WireGuard VPN (Client + Server) + Policy-Based Routing (8 gün)
-**Hedef:** WireGuard client tünelleri (dış VPN sunuculara bağlanma), WireGuard server (eve dışarıdan bağlanma — road warrior), tam kapsamlı PBR motoru, web UI ile yönetim.
+### Phase 8: WireGuard + OpenVPN + Policy-Based Routing (10 gün)
+**Hedef:** WireGuard client + server, OpenVPN client + server (PKI), tam kapsamlı PBR motoru, web UI ile yönetim.
 
 Oluşturulacak dosyalar:
 - `internal/services/vpn.go` — WireGuard client + server yönetimi
+- `internal/services/openvpn.go` — OpenVPN client + server + PKI yönetimi
 - `internal/services/routing.go` — PBR motoru (kural eşleştirme, nftables entegrasyonu, DNS-based routing)
-- `configs/sysconf/wireguard-client.conf.tmpl` — Client tünel config template
-- `configs/sysconf/wireguard-server.conf.tmpl` — Server interface config template
+- `configs/sysconf/wireguard-client.conf.tmpl` — WG client config template
+- `configs/sysconf/wireguard-server.conf.tmpl` — WG server config template
+- `configs/sysconf/openvpn-server.conf.tmpl` — OpenVPN server config template
+- `configs/sysconf/openvpn-client.conf.tmpl` — OpenVPN client config template
 - `configs/defaults/vpn.yaml`
 - `configs/defaults/routing.yaml`
 - `internal/web/handlers/vpn.go`
+- `internal/web/handlers/openvpn.go`
 - `internal/web/handlers/routing.go`
 - `web/templates/pages/vpn.html`
+- `web/templates/pages/openvpn.html`
 - `web/templates/pages/routing.html`
 - `web/templates/partials/vpn_clients.html`
 - `web/templates/partials/vpn_server.html`
 - `web/templates/partials/vpn_peer_form.html`
+- `web/templates/partials/ovpn_clients.html`
+- `web/templates/partials/ovpn_server.html`
+- `web/templates/partials/ovpn_client_form.html`
 - `web/templates/partials/policy_list.html`
 - `web/templates/partials/policy_form.html`
 - `web/templates/partials/policy_status.html`
@@ -1561,7 +1637,52 @@ Adımlar:
      - DDNS desteği: configurable hostname (ör: `ev.example.com`)
      - Port forwarding notu: ISP modem bridge modda değilse 51820 port forwarding gerekir
    - Agent operations: `vpn.server.up`, `vpn.server.down`, `vpn.server.reload`
-3. **PBR motoru — kural eşleştirme:**
+3. **OpenVPN client (outbound):**
+   - `.ovpn` dosya import: web UI'dan dosya yükle → config parse + validate → kaydet
+   - `openvpn --config {file} --daemon` ile bağlantı başlat
+   - Auth-user-pass desteği: username/password `.credentials.enc`'de saklanır
+   - Durum izleme: `openvpn --management` socket veya log parse → connected/disconnected/error
+   - PBR entegrasyonu: OpenVPN client da fwmark + routing table ile policy routing'e dahil
+   - Agent operations: `openvpn.client.connect`, `openvpn.client.disconnect`
+4. **OpenVPN server (inbound):**
+   - **PKI altyapısı (easy-rsa wrapper):**
+     - `easyrsa init-pki` → `/etc/openvpn/pki/` dizini oluştur
+     - `easyrsa build-ca nopass` → CA sertifikası
+     - `easyrsa gen-req server nopass` + `easyrsa sign-req server server` → server sertifikası
+     - `easyrsa gen-dh` → Diffie-Hellman parametreleri
+     - `openvpn --genkey secret ta.key` → tls-auth HMAC anahtarı
+     - Tüm bu adımlar web UI'dan tek tıkla ("PKI Oluştur" butonu)
+   - **Client sertifika yönetimi:**
+     - `easyrsa gen-req {name} nopass` + `easyrsa sign-req client {name}` → client cert+key
+     - Revoke: `easyrsa revoke {name}` + `easyrsa gen-crl` → CRL güncelle
+     - Enable/disable: revoke yerine CCD (client-config-dir) ile `disable` flag
+   - **Server config template:**
+     ```ini
+     port 1194
+     proto udp
+     dev tun
+     ca /etc/openvpn/pki/ca.crt
+     cert /etc/openvpn/pki/issued/server.crt
+     key /etc/openvpn/pki/private/server.key
+     dh /etc/openvpn/pki/dh.pem
+     tls-auth /etc/openvpn/pki/ta.key 0
+     server 10.20.0.0 255.255.255.0
+     push "redirect-gateway def1"           # Full tunnel
+     push "dhcp-option DNS 10.0.0.1"
+     cipher AES-256-GCM
+     auth SHA256
+     keepalive 10 120
+     persist-key
+     persist-tun
+     crl-verify /etc/openvpn/pki/crl.pem
+     ```
+   - **Client .ovpn dosyası oluşturma (inline sertifikalar):**
+     - Tüm sertifikalar (ca, cert, key, tls-auth) tek .ovpn dosyasına inline embed
+     - İndirme: `GET /openvpn/server/client/{name}/config`
+     - QR kodu: config string → qrencode → mobil OpenVPN app
+   - nftables: `iif tun0 oif {lan_iface} accept`, masquerade
+   - Agent operations: `openvpn.server.start`, `openvpn.server.stop`, `openvpn.server.reload`
+5. **PBR motoru — kural eşleştirme:**
    - `routing.yaml`'dan politika kurallarını yükle
    - Her politikayı nftables kuralına çevir:
      - Kaynak eşleştirme: `ip saddr {device_ip}` veya `ether saddr {mac}`
@@ -1580,35 +1701,51 @@ Adımlar:
 5. **nftables PBR chain:**
    - `chain pbr_policies` — priority sırasıyla kural zinciri
    - Firewall template güncelleme: PBR chain'i forward chain'e entegre
-6. **Kill switch:** VPN client tünel down → ilgili politikadaki cihazların trafiğini engelle
-7. **Startup restore:** `routing.yaml` + `vpn.yaml`'dan client tünel + server + tüm politika kurallarını kur
-8. **Web UI — VPN sayfası (HTMX):**
-   - İki tab/section: **Client Tünelleri** + **VPN Server**
-   - Client: tünel listesi (durum, handshake, transfer), CRUD formu
-   - Server: açma/kapama toggle, dinleme portu, subnet, peer listesi
-   - Peer kartı: isim, IP, son handshake, transfer, durum (online/offline)
-   - Peer ekleme formu: isim gir → keypair + psk + IP otomatik üret → config indir/QR göster
-   - Config indirme butonu (`.conf` dosyası) + QR kodu görüntüleme (mobil için)
-   - Tunnel mode seçimi: full tunnel / split tunnel (peer bazında)
-9. **Web UI — PBR sayfası (HTMX):**
-   - Politika listesi: sürükle-bırak ile priority sıralama (`htmx-sortable.js`)
-   - Politika ekleme/düzenleme formu:
-     - Kaynak: cihaz dropdown (DHCP lease'lerden) veya CIDR input
-     - Hedef: IP/CIDR input veya domain listesi (textarea, wildcard destekli)
-     - Port/protokol: input + TCP/UDP/any seçimi
-     - Zaman: schedule picker (başlangıç-bitiş saat + gün seçimi)
-     - Action: dropdown (wan, client tünel isimleri, drop)
-   - Enable/disable toggle
-   - Canlı eşleşme durumu: SSE ile hangi cihaz hangi politikaya eşleşiyor
-10. **i18n:** `{{ t .Lang "vpn.*" }}` ve `{{ t .Lang "routing.*" }}` ile tüm UI metinleri
+8. **Kill switch:** VPN client tünel down (WG veya OVPN) → ilgili politikadaki cihazların trafiğini engelle
+9. **Startup restore:** `routing.yaml` + `vpn.yaml` + `openvpn` config'den tüm tünel + server + politika kurallarını kur
+10. **Web UI — WireGuard sayfası (HTMX):**
+    - İki tab/section: **WG Client Tünelleri** + **WG Server**
+    - Client: tünel listesi (durum, handshake, transfer), CRUD formu
+    - Server: açma/kapama toggle, dinleme portu, subnet, peer listesi
+    - Peer kartı: isim, IP, son handshake, transfer, durum (online/offline)
+    - Peer ekleme formu: isim gir → keypair + psk + IP otomatik üret → config indir/QR göster
+    - Config indirme butonu (`.conf` dosyası) + QR kodu görüntüleme (mobil için)
+    - Tunnel mode seçimi: full tunnel / split tunnel (peer bazında)
+11. **Web UI — OpenVPN sayfası (HTMX):**
+    - İki tab/section: **OVPN Client** + **OVPN Server**
+    - Client tab: .ovpn dosya import (file upload), bağlantı listesi, connect/disconnect butonları
+    - Server tab:
+      - PKI durumu: CA oluşturulmuş mu, server cert geçerlilik süresi
+      - "PKI Oluştur" butonu (ilk kurulum, tek seferlik)
+      - Server açma/kapama toggle + ayarlar formu (port, protocol, cipher)
+      - Client sertifika listesi: isim, oluşturma tarihi, durum (aktif/revoked), son bağlantı
+      - Client ekleme: isim gir → sertifika oluştur → .ovpn dosya indir / QR göster
+      - Client revoke/enable/disable butonları
+      - Bağlı client listesi (real-time): IP, bağlantı süresi, transfer
+12. **Web UI — PBR sayfası (HTMX):**
+    - Politika listesi: sürükle-bırak ile priority sıralama (`htmx-sortable.js`)
+    - Politika ekleme/düzenleme formu:
+      - Kaynak: cihaz dropdown (DHCP lease'lerden) veya CIDR input
+      - Hedef: IP/CIDR input veya domain listesi (textarea, wildcard destekli)
+      - Port/protokol: input + TCP/UDP/any seçimi
+      - Zaman: schedule picker (başlangıç-bitiş saat + gün seçimi)
+      - Action: dropdown (wan, WG tünel, OVPN tünel, drop)
+    - Enable/disable toggle
+    - Canlı eşleşme durumu: SSE ile hangi cihaz hangi politikaya eşleşiyor
+13. **i18n:** `{{ t .Lang "vpn.*" }}`, `{{ t .Lang "openvpn.*" }}` ve `{{ t .Lang "routing.*" }}` ile tüm UI metinleri
 
 Manuel doğrulama:
-- **Client:** `wg show wg0` → client tünel aktif mi, handshake var mı
-- **Server:** `wg show wgs0` → server dinliyor mu, peer listesi doğru mu
-- **Road warrior:** telefondan QR okut → WireGuard app ile bağlan → LAN'daki cihazlara erişebiliyor mu
-- **Client config indirme:** `.conf` dosyasını laptop'ta import et → bağlantı kurulabiliyor mu
-- **Full vs split tunnel:** full tunnel'da tüm trafik router üzerinden mi, split tunnel'da sadece LAN mı
-- **Firewall:** VPN server peer'ları LAN'a erişebiliyor mu, internet çıkışı çalışıyor mu
+- **WG Client:** `wg show wg0` → client tünel aktif mi, handshake var mı
+- **WG Server:** `wg show wgs0` → server dinliyor mu, peer listesi doğru mu
+- **WG Road warrior:** telefondan QR okut → WireGuard app ile bağlan → LAN erişimi
+- **WG Config indirme:** `.conf` dosyasını laptop'ta import et → bağlantı kurulabiliyor mu
+- **WG Full vs split tunnel:** full tunnel'da tüm trafik router üzerinden mi
+- **WG Firewall:** VPN server peer'ları LAN'a erişebiliyor mu, internet çıkışı çalışıyor mu
+- **OVPN Client:** .ovpn dosya import → connect → `ip a show tun1` aktif mi
+- **OVPN Server PKI:** "PKI Oluştur" → CA + server cert oluşturuldu mu
+- **OVPN Client cert:** client sertifika oluştur → .ovpn dosya indir → bağlantı kurulabiliyor mu
+- **OVPN Revoke:** client revoke → bağlantı reddediliyor mu
+- **OVPN PBR:** OpenVPN client da PBR politikasına dahil edilebiliyor mu
 - **Kaynak bazlı PBR:** Xbox'a politika ata → VPN'den çıkıyor mu, diğer cihazlar direkt mi
 - **Hedef IP bazlı:** 1.2.3.0/24'e giden trafik → belirtilen tünelden çıkıyor mu
 - **Domain bazlı:** netflix.com politikası → `dig netflix.com`, çözümlenen IP VPN'den mi
@@ -1801,6 +1938,8 @@ firewallSvc.Apply(rules)
 | VPN server private key sızması        | AES-256-GCM at rest, peer config indirmede one-time token, QR timeout       |
 | VPN server WAN IP değişimi (PPPoE)    | DDNS desteği (configurable hostname), ip-up script ile DDNS güncelleme      |
 | DNS query log disk dolması            | logrotate (maxSize + retention), ring buffer in-memory, toggle ile kapatılabilir |
+| OpenVPN PKI private key sızması      | CA/server key /etc/openvpn/pki/ (700 perms), backup'ta AES-256-GCM encrypt      |
+| OpenVPN DH parametresi üretimi yavaş | `easyrsa gen-dh` arka planda, UI'da ilerleme göstergesi, ~2-5dk (i5 3470)        |
 
 ## Tahmini Toplam Süre
 
@@ -1813,8 +1952,8 @@ firewallSvc.Apply(rules)
 | 5     | Unbound DNS + DHCP + Query Logging    | 4   | 20        |
 | 6     | Dashboard + SSE                       | 3   | 23        |
 | 7     | SQM/QoS                               | 3   | 26        |
-| 8     | WireGuard VPN (Client+Server) + PBR   | 8   | 34        |
-| 9     | Samba NAS + M3U                       | 3   | 37        |
-| 10    | Storage + Syslog + NTP + Backup       | 5   | 42        |
+| 8     | WireGuard + OpenVPN + PBR             | 10  | 36        |
+| 9     | Samba NAS + M3U                       | 3   | 39        |
+| 10    | Storage + Syslog + NTP + Backup       | 5   | 44        |
 
-**Toplam: ~42 geliştirme günü** (tek geliştirici, her gün 4-6 saat efektif çalışma varsayımı)
+**Toplam: ~44 geliştirme günü** (tek geliştirici, her gün 4-6 saat efektif çalışma varsayımı)
