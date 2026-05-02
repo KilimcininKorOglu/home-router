@@ -68,8 +68,8 @@ func TestLoadDefaultConfig(t *testing.T) {
 		t.Fatalf("load default config: %v", err)
 	}
 
-	if loaded.System.Hostname != "home-router" {
-		t.Errorf("hostname = %q, want %q", loaded.System.Hostname, "home-router")
+	if loaded.System.Hostname != "hermes" {
+		t.Errorf("hostname = %q, want %q", loaded.System.Hostname, "hermes")
 	}
 	if loaded.PPPoE.MTU != 1492 {
 		t.Errorf("pppoe.mtu = %d, want 1492", loaded.PPPoE.MTU)

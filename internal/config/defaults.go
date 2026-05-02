@@ -3,7 +3,7 @@ package config
 func DefaultConfig() *Config {
 	return &Config{
 		System: SystemConfig{
-			Hostname:  "home-router",
+			Hostname:  "hermes",
 			Timezone:  "Europe/Istanbul",
 			Language:  "tr",
 			WebPort:   8443,
@@ -11,9 +11,9 @@ func DefaultConfig() *Config {
 			TLS: TLSConfig{
 				Mode: "self-signed",
 				SelfSigned: SelfSignedConfig{
-					CN:        "home-router.lan",
+					CN:        "hermes.lan",
 					ValidDays: 3650,
-					SANs:      []string{"home-router.lan", "10.10.10.1", "router.local"},
+					SANs:      []string{"hermes.lan", "10.10.10.1", "router.local"},
 				},
 			},
 		},

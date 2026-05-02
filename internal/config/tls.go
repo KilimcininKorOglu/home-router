@@ -80,7 +80,7 @@ func generateSelfSigned(cfg *TLSConfig, certPath, keyPath string) (*TLSCertInfo,
 
 	cn := cfg.SelfSigned.CN
 	if cn == "" {
-		cn = "home-router.lan"
+		cn = "hermes.lan"
 	}
 
 	validDays := cfg.SelfSigned.ValidDays

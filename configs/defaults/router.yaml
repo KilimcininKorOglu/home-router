@@ -1,5 +1,5 @@
 system:
-  hostname: "home-router"
+  hostname: "hermes"
   timezone: "Europe/Istanbul"
   language: "tr"
   adminPasswordHash: ""
@@ -11,10 +11,10 @@ system:
     certFile: ""
     keyFile: ""
     selfSigned:
-      cn: "home-router.lan"
+      cn: "hermes.lan"
       validDays: 3650
       sans:
-        - "home-router.lan"
+        - "hermes.lan"
         - "10.10.10.1"
         - "router.local"
     acme:
