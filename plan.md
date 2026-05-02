@@ -2013,13 +2013,13 @@ Oluşturulacak dosyalar:
 - `web/templates/partials/qos-status.html`
 
 Adımlar:
-1. CAKE qdisc:
+1. ✅ CAKE qdisc:
    - Egress: `tc qdisc add dev ppp0 root cake bandwidth {upload}kbit`
    - Ingress: IFB device → `tc qdisc add dev ifb0 root cake bandwidth {download}kbit wash ingress`
-2. Congestion control: `sysctl net.ipv4.tcp_congestion_control={bbr|cubic}`
-3. BBR prerequisite: `sysctl net.core.default_qdisc=fq`
-4. Profiller: cake (varsayılan), fq_codel, none
-5. Agent ops: `qos.apply`, `qos.clear`
+2. ✅ Congestion control: `sysctl net.ipv4.tcp_congestion_control={bbr|cubic}`
+3. ✅ BBR prerequisite: `sysctl net.core.default_qdisc=fq`
+4. ✅ Profiller: cake (varsayılan), fq_codel, none
+5. ✅ Agent ops: `qos.apply`, `qos.clear`
 6. HTMX: profil seçimi (radio), bandwidth input, apply butonu
 7. **i18n:** QoS profil açıklamaları, etiketler, birimler `{{ t .Lang "qos.*" }}` ile
 
