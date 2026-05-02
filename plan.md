@@ -1627,7 +1627,7 @@ Adımlar:
 5. ✅ **Dil değiştirme handler:** `POST /settings/lang` → `lang` cookie set → `HX-Refresh: true`
 6. ✅ **`<html lang="{{ .Lang }}">` attribute'u** base layout'ta dinamik
 7. ✅ `go:embed` ile tüm static + template + locale dosyalarını binary'ye göm
-8. **TLS sertifika yönetimi:**
+8. ✅ **TLS sertifika yönetimi:**
    - `config/tls.go`: TLS modu okuma (self-signed | mkcert | acme)
    - **Self-signed (varsayılan):** ilk başlatmada Go `crypto/ecdsa` (P-256) + `crypto/x509` ile otomatik cert üret
      - SAN: config'deki hostname + LAN IP + `*.local`
