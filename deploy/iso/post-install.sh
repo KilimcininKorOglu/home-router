@@ -142,9 +142,9 @@ touch "$DATA_DIR/.first-boot"
 systemctl disable dnsmasq 2>/dev/null || true
 systemctl stop dnsmasq 2>/dev/null || true
 
-# SSH hardening
-sed -i 's/#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+# SSH hardening — root login allowed (password set during install), LAN only via nftables
+sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
 echo "=== Post-install complete ==="
 echo "System will reboot into Home Router."
