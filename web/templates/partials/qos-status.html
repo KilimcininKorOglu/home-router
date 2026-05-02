@@ -1,0 +1,22 @@
+{{ define "qos-status" }}
+{{ if .Status }}
+<div style="display:flex; gap:var(--space-lg);">
+    <div class="stat-card" style="flex:1;">
+        <div class="stat-label">{{ t $.Lang "qos.profile" }}</div>
+        <div class="stat-value" style="font-size:var(--font-lg);">{{ .Status.Profile }}</div>
+    </div>
+    <div class="stat-card" style="flex:1;">
+        <div class="stat-label">{{ t $.Lang "qos.congestion" }}</div>
+        <div class="stat-value" style="font-size:var(--font-lg); text-transform:uppercase;">{{ .Status.CongestionControl }}</div>
+    </div>
+    <div class="stat-card" style="flex:1;">
+        <div class="stat-label">{{ t $.Lang "common.status" }}</div>
+        {{ if .Status.Enabled }}
+            <span class="badge badge-success">{{ t $.Lang "common.enabled" }}</span>
+        {{ else }}
+            <span class="badge badge-error">{{ t $.Lang "common.disabled" }}</span>
+        {{ end }}
+    </div>
+</div>
+{{ end }}
+{{ end }}

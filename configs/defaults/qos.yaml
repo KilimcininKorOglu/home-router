@@ -1,0 +1,6 @@
+enabled: false
+profile: "cake"
+uploadKbps: 40000
+downloadKbps: 950000
+congestionControl: "bbr"
+perDeviceLimits: {}
