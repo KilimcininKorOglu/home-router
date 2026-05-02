@@ -2350,7 +2350,7 @@ Oluşturulacak dosyalar:
 
 Adımlar:
 
-1. **`install.sh` finalize (interactive mode):**
+1. ✅ **`install.sh` finalize (interactive mode):**
    - Phase 1'de oluşturulan iskelet scripti tamamla
    - Tüm Phase 1-10 bileşenlerinin kurulumu dahil
    - İnteraktif mod: admin şifresi, interface seçimi, WAN tipi (PPPoE/DHCP) soruları

@@ -196,11 +196,114 @@ print_summary() {
     echo "========================================="
 }
 
+setup_udev_rules() {
+    cat > /etc/udev/rules.d/70-home-router.rules <<'UDEV'
+# USB tethering — Android RNDIS
+SUBSYSTEM=="net", ACTION=="add", DRIVER=="rndis_host", NAME="usb0"
+UDEV
+
+    udevadm control --reload-rules
+    log_info "Installed udev rules"
+}
+
+setup_sysconf_templates() {
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local sysconf_dir="$script_dir/../configs/sysconf"
+
+    if [[ -d "$sysconf_dir" ]]; then
+        mkdir -p "$DATA_DIR/sysconf"
+        cp "$sysconf_dir"/*.tmpl "$DATA_DIR/sysconf/" 2>/dev/null || true
+        log_info "Installed sysconf templates"
+    fi
+}
+
+setup_initial_tls() {
+    if [[ -f "$DATA_DIR/tls/server.crt" ]]; then
+        log_info "TLS certificate already exists"
+        return
+    fi
+
+    log_info "Generating initial self-signed TLS certificate..."
+    "$INSTALL_DIR/$BINARY_NAME" serve --config "$CONFIG_DIR/router.yaml" &
+    local pid=$!
+    sleep 2
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+
+    if [[ -f "$DATA_DIR/tls/server.crt" ]]; then
+        log_info "TLS certificate generated"
+    else
+        log_warn "TLS certificate generation deferred to first start"
+    fi
+}
+
+check_installation() {
+    local errors=0
+
+    echo "=== Installation Check ==="
+
+    for cmd in pppd nft wg openvpn unbound dnsmasq chronyc smbcontrol smartctl mdadm qrencode; do
+        if command -v "$cmd" &>/dev/null; then
+            echo "  [OK] $cmd"
+        else
+            echo "  [MISSING] $cmd"
+            ((errors++))
+        fi
+    done
+
+    if [[ -f "$INSTALL_DIR/$BINARY_NAME" ]]; then
+        echo "  [OK] $BINARY_NAME binary"
+    else
+        echo "  [MISSING] $BINARY_NAME binary"
+        ((errors++))
+    fi
+
+    for unit in home-router-agent.service home-router-web.service home-router.target; do
+        if [[ -f "$SYSTEMD_DIR/$unit" ]]; then
+            echo "  [OK] $unit"
+        else
+            echo "  [MISSING] $unit"
+            ((errors++))
+        fi
+    done
+
+    if [[ -f "$CONFIG_DIR/router.yaml" ]]; then
+        echo "  [OK] router.yaml"
+    else
+        echo "  [MISSING] router.yaml"
+        ((errors++))
+    fi
+
+    if [[ "$errors" -eq 0 ]]; then
+        echo ""
+        echo "All checks passed."
+    else
+        echo ""
+        echo "$errors issue(s) found."
+    fi
+
+    return "$errors"
+}
+
 main() {
+    if [[ "${1:-}" == "--check" ]]; then
+        check_installation
+        exit $?
+    fi
+
     check_root
     check_debian
 
-    local binary_path="${1:-./home-router}"
+    local force=false
+    local binary_path="./home-router"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force) force=true; shift ;;
+            *) binary_path="$1"; shift ;;
+        esac
+    done
 
     install_dependencies
     create_user
@@ -208,8 +311,11 @@ main() {
     setup_directories
     install_systemd_units
     setup_sysctl
+    setup_udev_rules
+    setup_sysconf_templates
     setup_default_config
     setup_admin_password
+    setup_initial_tls
     print_summary
 }
 
