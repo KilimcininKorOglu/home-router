@@ -1,0 +1,38 @@
+[global]
+workgroup = WORKGROUP
+server string = Home Router NAS
+server role = standalone server
+log file = /var/log/samba/log.%m
+max log size = 1000
+logging = file
+panic action = /usr/share/samba/panic-action %d
+server role = standalone server
+obey pam restrictions = yes
+unix password sync = yes
+passwd program = /usr/bin/passwd %u
+passwd chat = *Enter\snew\s*\spassword:* %n\n *Retype\snew\s*\spassword:* %n\n *password\supdated\ssuccessfully* .
+pam password change = yes
+map to guest = bad user
+usershare allow guests = yes
+
+{{ range .Shares }}
+[{{ .Name }}]
+    path = {{ .Path }}
+    browseable = yes
+{{- if .GuestOK }}
+    guest ok = yes
+    public = yes
+{{- else }}
+    guest ok = no
+{{- end }}
+{{- if .ReadOnly }}
+    read only = yes
+{{- else }}
+    read only = no
+{{- end }}
+{{- if .ValidUsers }}
+    valid users = {{ join .ValidUsers ", " }}
+{{- end }}
+    create mask = 0664
+    directory mask = 0775
+{{ end }}

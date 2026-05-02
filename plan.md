@@ -2242,14 +2242,14 @@ Oluşturulacak dosyalar:
 - `web/templates/partials/m3u-status.html`
 
 Adımlar:
-1. Samba config template: global + per-share
-2. Paylaşım CRUD: oluştur/güncelle/sil → `smb.conf` regenerate → `smbcontrol reload-config`
-3. M3U parser:
+1. ✅ Samba config template: global + per-share
+2. ✅ Paylaşım CRUD: oluştur/güncelle/sil → `smb.conf` regenerate → `smbcontrol reload-config`
+3. ✅ M3U parser:
    - `net/http` ile M3U/M3U8 indir
    - `#EXTINF` parse: grup, başlık, URL
    - İçerikleri gruplara göre klasörlere indir (goroutine pool)
    - Kodi `.strm` dosyaları oluştur
-4. Zamanlanmış sync: `time.Ticker` goroutine
+4. ✅ Zamanlanmış sync: `time.Ticker` goroutine
 5. HTMX: paylaşım listesi, M3U sync butonu, durum göstergesi
 6. **i18n:** Paylaşım form etiketleri, M3U durum mesajları `{{ t .Lang "nas.*" }}` ile
 
