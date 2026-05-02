@@ -1620,7 +1620,7 @@ Oluşturulacak dosyalar:
 Adımlar:
 1. `net/http.ServeMux` ile routing (Go 1.22+ pattern: `GET /login`, `POST /login`, `POST /settings/lang`)
 2. `html/template` ile layout inheritance: `base.html` → `{{block "content" .}}`
-3. **Template FuncMap'e i18n fonksiyonları ekle:**
+3. ✅ **Template FuncMap'e i18n fonksiyonları ekle:**
    - `t`: `func(lang, key string) string` → çeviri döndür
    - `tp`: `func(lang, key string, params ...string) string` → parametreli çeviri
 4. **Her handler'da `.Lang` context'e ekle:** `data.Lang = i18n.LangFromContext(r.Context())`
