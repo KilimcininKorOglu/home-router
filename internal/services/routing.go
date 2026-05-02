@@ -4,21 +4,28 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/netutil"
 )
 
 type RoutingService struct {
-	cfg *config.Config
-	mu  sync.RWMutex
+	cfg            *config.Config
+	mu             sync.RWMutex
+	domainSets     map[string]map[string]bool
+	domainCancel   context.CancelFunc
 }
 
 func NewRoutingService(cfg *config.Config) *RoutingService {
-	return &RoutingService{cfg: cfg}
+	return &RoutingService{
+		cfg:        cfg,
+		domainSets: make(map[string]map[string]bool),
+	}
 }
 
 func (s *RoutingService) GetPolicies() []config.RoutingPolicy {
@@ -104,12 +111,32 @@ func (s *RoutingService) Apply(ctx context.Context) error {
 		return policies[i].Priority < policies[j].Priority
 	})
 
+	nftRules := s.generateFullNftChain(policies)
+	if err := s.applyNftRules(ctx, nftRules); err != nil {
+		return fmt.Errorf("apply nft PBR chain: %w", err)
+	}
+
 	for _, p := range policies {
 		if !p.Enabled {
 			continue
 		}
-		if err := s.applyPolicy(ctx, p); err != nil {
-			log.Printf("apply policy %q: %v", p.Name, err)
+		tunnel := s.findTunnel(p.Tunnel)
+		if tunnel == nil {
+			continue
+		}
+
+		netutil.Run(ctx, "ip", "rule", "del", "fwmark",
+			fmt.Sprintf("%d", tunnel.Fwmark), "lookup", fmt.Sprintf("%d", tunnel.Table))
+
+		_, err := netutil.Run(ctx, "ip", "rule", "add", "fwmark",
+			fmt.Sprintf("%d", tunnel.Fwmark), "lookup", fmt.Sprintf("%d", tunnel.Table),
+			"priority", fmt.Sprintf("%d", p.Priority))
+		if err != nil {
+			log.Printf("ip rule add for policy %q: %v", p.Name, err)
+		}
+
+		if len(p.Domains) > 0 {
+			s.setupDomainSet(ctx, p.Name, p.Domains, tunnel.Fwmark)
 		}
 	}
 
@@ -118,46 +145,191 @@ func (s *RoutingService) Apply(ctx context.Context) error {
 }
 
 func (s *RoutingService) Clear(ctx context.Context) error {
+	netutil.Run(ctx, "nft", "delete", "chain", "inet", "filter", "pbr_policies")
+
 	for _, p := range s.cfg.Routing.Policies {
-		s.clearPolicy(ctx, p)
-	}
-	return nil
-}
+		tunnel := s.findTunnel(p.Tunnel)
+		if tunnel == nil {
+			continue
+		}
+		netutil.Run(ctx, "ip", "rule", "del", "fwmark",
+			fmt.Sprintf("%d", tunnel.Fwmark), "lookup", fmt.Sprintf("%d", tunnel.Table))
 
-func (s *RoutingService) applyPolicy(ctx context.Context, p config.RoutingPolicy) error {
-	tunnel := s.findTunnel(p.Tunnel)
-	if tunnel == nil {
-		return fmt.Errorf("tunnel %q not found for policy %q", p.Tunnel, p.Name)
-	}
-
-	for _, mac := range p.SrcMACs {
-		rule := fmt.Sprintf("ether saddr %s meta mark set %d", mac, tunnel.Fwmark)
-		log.Printf("PBR: %s → %s (%s)", mac, p.Tunnel, rule)
+		if len(p.Domains) > 0 {
+			netutil.Run(ctx, "nft", "delete", "set", "inet", "filter", "pbr_"+sanitizeName(p.Name))
+		}
 	}
 
-	for _, ip := range p.SrcIPs {
-		rule := fmt.Sprintf("ip saddr %s meta mark set %d", ip, tunnel.Fwmark)
-		log.Printf("PBR: %s → %s (%s)", ip, p.Tunnel, rule)
-	}
-
-	_, err := netutil.Run(ctx, "ip", "rule", "add", "fwmark",
-		fmt.Sprintf("%d", tunnel.Fwmark), "lookup", fmt.Sprintf("%d", tunnel.Table),
-		"priority", fmt.Sprintf("%d", p.Priority))
-	if err != nil {
-		log.Printf("ip rule add for policy %q: %v", p.Name, err)
+	if s.domainCancel != nil {
+		s.domainCancel()
 	}
 
 	return nil
 }
 
-func (s *RoutingService) clearPolicy(ctx context.Context, p config.RoutingPolicy) {
-	tunnel := s.findTunnel(p.Tunnel)
-	if tunnel == nil {
-		return
+func (s *RoutingService) generateFullNftChain(policies []config.RoutingPolicy) string {
+	var sb strings.Builder
+
+	sb.WriteString("flush chain inet filter pbr_policies 2>/dev/null\n")
+	sb.WriteString("add chain inet filter pbr_policies { type filter hook forward priority -1 ; policy accept ; }\n")
+
+	for _, p := range policies {
+		if !p.Enabled {
+			continue
+		}
+
+		tunnel := s.findTunnel(p.Tunnel)
+		if tunnel == nil {
+			continue
+		}
+
+		schedulePrefix := ""
+		if p.Schedule != "" {
+			schedulePrefix = buildScheduleMatch(p.Schedule)
+		}
+
+		for _, mac := range p.SrcMACs {
+			fmt.Fprintf(&sb, "add rule inet filter pbr_policies %sether saddr %s meta mark set %d\n",
+				schedulePrefix, mac, tunnel.Fwmark)
+		}
+		for _, ip := range p.SrcIPs {
+			fmt.Fprintf(&sb, "add rule inet filter pbr_policies %sip saddr %s meta mark set %d\n",
+				schedulePrefix, ip, tunnel.Fwmark)
+		}
+		for _, dst := range p.DstIPs {
+			fmt.Fprintf(&sb, "add rule inet filter pbr_policies %sip daddr %s meta mark set %d\n",
+				schedulePrefix, dst, tunnel.Fwmark)
+		}
+		for _, port := range p.DstPorts {
+			proto := p.Protocol
+			if proto == "" {
+				proto = "tcp"
+			}
+			fmt.Fprintf(&sb, "add rule inet filter pbr_policies %s%s dport %d meta mark set %d\n",
+				schedulePrefix, proto, port, tunnel.Fwmark)
+		}
+
+		if len(p.Domains) > 0 {
+			setName := "pbr_" + sanitizeName(p.Name)
+			fmt.Fprintf(&sb, "add set inet filter %s { type ipv4_addr ; flags timeout ; }\n", setName)
+			fmt.Fprintf(&sb, "add rule inet filter pbr_policies %sip daddr @%s meta mark set %d\n",
+				schedulePrefix, setName, tunnel.Fwmark)
+		}
+
+		if p.KillSwitch {
+			for _, mac := range p.SrcMACs {
+				fmt.Fprintf(&sb, "add rule inet filter pbr_policies ether saddr %s meta mark != %d drop\n",
+					mac, tunnel.Fwmark)
+			}
+			for _, ip := range p.SrcIPs {
+				fmt.Fprintf(&sb, "add rule inet filter pbr_policies ip saddr %s meta mark != %d drop\n",
+					ip, tunnel.Fwmark)
+			}
+		}
 	}
 
-	netutil.Run(ctx, "ip", "rule", "del", "fwmark",
-		fmt.Sprintf("%d", tunnel.Fwmark), "lookup", fmt.Sprintf("%d", tunnel.Table))
+	sb.WriteString("add rule inet filter pbr_policies ct mark set meta mark\n")
+
+	return sb.String()
+}
+
+func (s *RoutingService) applyNftRules(ctx context.Context, rules string) error {
+	tmpFile := "/tmp/pbr-rules.nft"
+	if err := os.WriteFile(tmpFile, []byte(rules), 0o600); err != nil {
+		return fmt.Errorf("write PBR rules: %w", err)
+	}
+	defer os.Remove(tmpFile)
+
+	_, err := netutil.Run(ctx, "nft", "-f", tmpFile)
+	return err
+}
+
+func (s *RoutingService) setupDomainSet(ctx context.Context, policyName string, domains []string, fwmark int) {
+	setName := "pbr_" + sanitizeName(policyName)
+
+	s.mu.Lock()
+	if s.domainSets[setName] == nil {
+		s.domainSets[setName] = make(map[string]bool)
+	}
+	for _, d := range domains {
+		s.domainSets[setName][d] = true
+	}
+	s.mu.Unlock()
+
+	s.resolveDomains(ctx, setName, domains)
+}
+
+func (s *RoutingService) resolveDomains(ctx context.Context, setName string, domains []string) {
+	for _, domain := range domains {
+		out, err := netutil.RunSimple(ctx, "dig", "+short", domain)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+			ip := strings.TrimSpace(line)
+			if ip == "" || strings.Contains(ip, ":") {
+				continue
+			}
+			netutil.Run(ctx, "nft", "add", "element", "inet", "filter", setName,
+				"{", ip, "timeout", "300s", "}")
+		}
+	}
+}
+
+func (s *RoutingService) StartDomainRefresh(ctx context.Context) {
+	ctx, s.domainCancel = context.WithCancel(ctx)
+
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.mu.RLock()
+				for setName, domainMap := range s.domainSets {
+					var domains []string
+					for d := range domainMap {
+						domains = append(domains, d)
+					}
+					s.resolveDomains(ctx, setName, domains)
+				}
+				s.mu.RUnlock()
+			}
+		}
+	}()
+}
+
+func buildScheduleMatch(schedule string) string {
+	parts := strings.Split(schedule, "-")
+	if len(parts) != 2 {
+		return ""
+	}
+
+	start := strings.TrimSpace(parts[0])
+	end := strings.TrimSpace(parts[1])
+
+	if start == "" || end == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("meta hour >= \"%s\" meta hour < \"%s\" ", start, end)
+}
+
+func (s *RoutingService) GenerateNftRules() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	policies := make([]config.RoutingPolicy, len(s.cfg.Routing.Policies))
+	copy(policies, s.cfg.Routing.Policies)
+
+	sort.Slice(policies, func(i, j int) bool {
+		return policies[i].Priority < policies[j].Priority
+	})
+
+	return s.generateFullNftChain(policies)
 }
 
 type tunnelRef struct {
@@ -179,38 +351,7 @@ func (s *RoutingService) findTunnel(name string) *tunnelRef {
 	return nil
 }
 
-func (s *RoutingService) GenerateNftRules() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	var sb strings.Builder
-	for _, p := range s.cfg.Routing.Policies {
-		if !p.Enabled {
-			continue
-		}
-
-		tunnel := s.findTunnel(p.Tunnel)
-		if tunnel == nil {
-			continue
-		}
-
-		for _, mac := range p.SrcMACs {
-			fmt.Fprintf(&sb, "        ether saddr %s meta mark set %d\n", mac, tunnel.Fwmark)
-		}
-		for _, ip := range p.SrcIPs {
-			fmt.Fprintf(&sb, "        ip saddr %s meta mark set %d\n", ip, tunnel.Fwmark)
-		}
-		for _, dst := range p.DstIPs {
-			fmt.Fprintf(&sb, "        ip daddr %s meta mark set %d\n", dst, tunnel.Fwmark)
-		}
-		for _, port := range p.DstPorts {
-			proto := p.Protocol
-			if proto == "" {
-				proto = "tcp"
-			}
-			fmt.Fprintf(&sb, "        %s dport %d meta mark set %d\n", proto, port, tunnel.Fwmark)
-		}
-	}
-
-	return sb.String()
+func sanitizeName(s string) string {
+	r := strings.NewReplacer(" ", "_", "-", "_", ".", "_")
+	return r.Replace(s)
 }

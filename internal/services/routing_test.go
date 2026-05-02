@@ -95,6 +95,124 @@ func TestRoutingGenerateNftRules(t *testing.T) {
 	if !strings.Contains(rules, "ether saddr aa:bb:cc:dd:ee:ff meta mark set 100") {
 		t.Errorf("expected fwmark rule, got:\n%s", rules)
 	}
+	if !strings.Contains(rules, "pbr_policies") {
+		t.Error("should contain pbr_policies chain")
+	}
+	if !strings.Contains(rules, "ct mark set meta mark") {
+		t.Error("should contain ct mark preservation rule")
+	}
+}
+
+func TestRoutingDstIPRules(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.VPN.Clients = []config.WGClientTunnel{
+		{Name: "vpn1", Table: 200, Fwmark: 200},
+	}
+
+	svc := services.NewRoutingService(cfg)
+	svc.AddPolicy(config.RoutingPolicy{
+		Name:    "netflix",
+		Enabled: true,
+		DstIPs:  []string{"1.2.3.0/24", "4.5.6.0/24"},
+		Tunnel:  "vpn1",
+	})
+
+	rules := svc.GenerateNftRules()
+	if !strings.Contains(rules, "ip daddr 1.2.3.0/24 meta mark set 200") {
+		t.Errorf("expected dst IP rule, got:\n%s", rules)
+	}
+}
+
+func TestRoutingPortRules(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.VPN.Clients = []config.WGClientTunnel{
+		{Name: "vpn1", Table: 200, Fwmark: 200},
+	}
+
+	svc := services.NewRoutingService(cfg)
+	svc.AddPolicy(config.RoutingPolicy{
+		Name:     "gaming",
+		Enabled:  true,
+		DstPorts: []int{3478, 3479},
+		Protocol: "udp",
+		Tunnel:   "vpn1",
+	})
+
+	rules := svc.GenerateNftRules()
+	if !strings.Contains(rules, "udp dport 3478 meta mark set 200") {
+		t.Errorf("expected port rule, got:\n%s", rules)
+	}
+}
+
+func TestRoutingScheduleRules(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.VPN.Clients = []config.WGClientTunnel{
+		{Name: "vpn1", Table: 100, Fwmark: 100},
+	}
+
+	svc := services.NewRoutingService(cfg)
+	svc.AddPolicy(config.RoutingPolicy{
+		Name:     "night-vpn",
+		Enabled:  true,
+		SrcIPs:   []string{"10.10.10.50"},
+		Tunnel:   "vpn1",
+		Schedule: "22:00-06:00",
+	})
+
+	rules := svc.GenerateNftRules()
+	if !strings.Contains(rules, `meta hour >= "22:00"`) {
+		t.Errorf("expected schedule rule, got:\n%s", rules)
+	}
+	if !strings.Contains(rules, `meta hour < "06:00"`) {
+		t.Errorf("expected schedule end, got:\n%s", rules)
+	}
+}
+
+func TestRoutingKillSwitch(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.VPN.Clients = []config.WGClientTunnel{
+		{Name: "vpn1", Table: 100, Fwmark: 100},
+	}
+
+	svc := services.NewRoutingService(cfg)
+	svc.AddPolicy(config.RoutingPolicy{
+		Name:       "secure",
+		Enabled:    true,
+		SrcMACs:    []string{"aa:bb:cc:dd:ee:ff"},
+		Tunnel:     "vpn1",
+		KillSwitch: true,
+	})
+
+	rules := svc.GenerateNftRules()
+	if !strings.Contains(rules, "meta mark != 100 drop") {
+		t.Errorf("expected kill switch drop rule, got:\n%s", rules)
+	}
+}
+
+func TestRoutingDomainSet(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.VPN.Clients = []config.WGClientTunnel{
+		{Name: "vpn1", Table: 100, Fwmark: 100},
+	}
+
+	svc := services.NewRoutingService(cfg)
+	svc.AddPolicy(config.RoutingPolicy{
+		Name:    "streaming",
+		Enabled: true,
+		Domains: []string{"netflix.com", "youtube.com"},
+		Tunnel:  "vpn1",
+	})
+
+	rules := svc.GenerateNftRules()
+	if !strings.Contains(rules, "pbr_streaming") {
+		t.Errorf("expected domain set name, got:\n%s", rules)
+	}
+	if !strings.Contains(rules, "type ipv4_addr") {
+		t.Errorf("expected set definition, got:\n%s", rules)
+	}
+	if !strings.Contains(rules, "@pbr_streaming") {
+		t.Errorf("expected set reference in rule, got:\n%s", rules)
+	}
 }
 
 func TestRoutingRemovePolicyNotFound(t *testing.T) {
