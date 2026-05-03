@@ -53,6 +53,13 @@ server:
     root-hints: "/usr/share/dns/root.hints"
     auto-trust-anchor-file: "/var/lib/unbound/root.key"
 
+{{- range .StaticRecords }}
+    local-data: "{{ .Name }}. IN A {{ .IP }}"
+{{- if .LocalZone }}
+    local-zone: "{{ .Name }}." typetransparent
+{{- end }}
+{{- end }}
+
     include: "/etc/unbound/blocklist.conf"
 
 {{- if .EnableDoT }}

@@ -343,6 +343,13 @@
     "dns.cacheMisses": "Önbellek Kaçırma",
     "dns.updateBlocklist": "Güncelle",
     "dns.blocklistDesc": "Engelleme listesi kaynakları router.yaml'da yapılandırılmıştır. Güncellemek için tıklayın.",
+    "dns.localRecords": "Yerel DNS Kayıtları",
+    "dns.addRecord": "Kayıt Ekle",
+    "dns.recordName": "Ad (FQDN)",
+    "dns.recordIP": "IP Adresi",
+    "dns.localZone": "Yerel Zone",
+    "dns.localZoneHint": "Split-DNS: bu ad altında eşleşmeyen sorgular upstream'e gider",
+    "dns.noRecords": "Yerel DNS kaydı yok",
 
     "openvpn.pkiNotReady": "PKI başlatılmamış",
     "openvpn.initPki": "PKI Oluştur",

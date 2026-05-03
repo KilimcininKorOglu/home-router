@@ -62,6 +62,66 @@
         {{ end }}
     </div>
 
+    <!-- Local DNS Records -->
+    <div class="card" style="margin-top:var(--space-lg);">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "dns.localRecords" }}</span>
+            <button class="btn btn-primary btn-sm" type="button"
+                onclick="document.getElementById('dns-record-form').style.display='block'">
+                {{ t $.Lang "dns.addRecord" }}
+            </button>
+        </div>
+
+        <form id="dns-record-form" style="display:none; gap:var(--space-md); margin-bottom:var(--space-md);"
+              hx-post="/dns/records" hx-swap="none"
+              hx-on::after-request="this.reset(); this.style.display='none';">
+            <div style="display:grid; grid-template-columns:2fr 1fr auto; gap:var(--space-sm);">
+                <input class="input" name="name" placeholder="printer.hermes.lan" required>
+                <input class="input" name="ip" placeholder="10.10.10.50" required>
+                <button class="btn btn-primary btn-sm" type="submit">{{ t $.Lang "common.add" }}</button>
+            </div>
+            <label style="display:flex; gap:var(--space-xs); font-size:var(--font-sm); color:var(--text-secondary); margin-top:var(--space-xs);">
+                <input type="checkbox" name="local_zone">
+                <span>{{ t $.Lang "dns.localZone" }} — {{ t $.Lang "dns.localZoneHint" }}</span>
+            </label>
+        </form>
+
+        {{ if .StaticRecords }}
+        <table style="width:100%; font-size:var(--font-sm);">
+            <thead>
+                <tr style="border-bottom:1px solid var(--border-color);">
+                    <th style="text-align:left; padding:var(--space-xs);">{{ t $.Lang "dns.recordName" }}</th>
+                    <th style="text-align:left; padding:var(--space-xs);">{{ t $.Lang "dns.recordIP" }}</th>
+                    <th style="text-align:left; padding:var(--space-xs);">{{ t $.Lang "dns.localZone" }}</th>
+                    <th style="width:80px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range $idx, $r := .StaticRecords }}
+                <tr style="border-bottom:1px solid var(--border-color);">
+                    <td style="padding:var(--space-xs); font-family:var(--font-mono);">{{ $r.Name }}</td>
+                    <td style="padding:var(--space-xs); font-family:var(--font-mono);">{{ $r.IP }}</td>
+                    <td style="padding:var(--space-xs);">
+                        {{ if $r.LocalZone }}<span class="badge badge-info">✓</span>{{ end }}
+                    </td>
+                    <td style="padding:var(--space-xs); text-align:right;">
+                        <button class="btn btn-danger btn-sm"
+                                hx-delete="/dns/records/{{ $idx }}" hx-swap="none"
+                                hx-confirm="{{ t $.Lang "common.confirm" }}">
+                            {{ t $.Lang "common.delete" }}
+                        </button>
+                    </td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+        {{ else }}
+        <div style="color:var(--text-secondary); font-size:var(--font-sm); padding:var(--space-md);">
+            {{ t $.Lang "dns.noRecords" }}
+        </div>
+        {{ end }}
+    </div>
+
     {{ template "dns-blocklist" $ }}
 
     {{ end }}

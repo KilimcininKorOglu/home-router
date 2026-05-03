@@ -67,14 +67,15 @@ func NewDNSService(cfg *config.Config) *DNSService {
 }
 
 type unboundTemplateData struct {
-	IPv6Enabled    bool
-	AllowSubnets   []string
-	ULAPrefix      string
-	CacheSize      int
+	IPv6Enabled     bool
+	AllowSubnets    []string
+	ULAPrefix       string
+	CacheSize       int
 	QueryLogEnabled bool
-	QueryLogPath   string
-	EnableDoT      bool
-	DoTUpstream    string
+	QueryLogPath    string
+	EnableDoT       bool
+	DoTUpstream     string
+	StaticRecords   []config.StaticDNSRecord
 }
 
 // RenderConfig returns the rendered unbound.conf as a string. Pure
@@ -97,6 +98,7 @@ func (s *DNSService) RenderConfig() (string, error) {
 		EnableDoT:       s.cfg.DNS.EnableDoT,
 		DoTUpstream:     s.cfg.DNS.DoTUpstream,
 		ULAPrefix:       s.cfg.IPv6.LAN.ULA.Prefix,
+		StaticRecords:   s.cfg.DNS.StaticRecords,
 	}
 
 	if data.QueryLogPath == "" {
@@ -301,6 +303,42 @@ func (s *DNSService) ClearQueryLog(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// GetStaticRecords returns the configured static DNS records.
+func (s *DNSService) GetStaticRecords() []config.StaticDNSRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.DNS.StaticRecords
+}
+
+// AddStaticRecord adds a forward A record. The Name should be an FQDN
+// (e.g. "printer.hermes.lan"). LocalZone=true also emits a typetransparent
+// local-zone for split-DNS.
+func (s *DNSService) AddStaticRecord(rec config.StaticDNSRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, r := range s.cfg.DNS.StaticRecords {
+		if strings.EqualFold(r.Name, rec.Name) {
+			return fmt.Errorf("DNS record %s already exists", rec.Name)
+		}
+	}
+	s.cfg.DNS.StaticRecords = append(s.cfg.DNS.StaticRecords, rec)
+	return s.cfg.SaveToFile()
+}
+
+// RemoveStaticRecord deletes the record at the given index.
+func (s *DNSService) RemoveStaticRecord(index int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if index < 0 || index >= len(s.cfg.DNS.StaticRecords) {
+		return fmt.Errorf("invalid static record index: %d", index)
+	}
+	s.cfg.DNS.StaticRecords = append(
+		s.cfg.DNS.StaticRecords[:index],
+		s.cfg.DNS.StaticRecords[index+1:]...,
+	)
+	return s.cfg.SaveToFile()
 }
 
 func (s *DNSService) tailQueryLog(ctx context.Context) {

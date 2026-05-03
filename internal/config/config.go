@@ -219,13 +219,25 @@ type QoSConfig struct {
 }
 
 type DNSConfig struct {
-	Upstream                []string       `yaml:"upstream"`
-	DoTUpstream             string         `yaml:"dotUpstream"`
-	EnableDoT               bool           `yaml:"enableDoT"`
-	BlocklistURLs           []string       `yaml:"blocklistUrls"`
-	BlocklistUpdateSchedule string         `yaml:"blocklistUpdateSchedule"`
-	CacheSize               int            `yaml:"cacheSize"`
-	QueryLog                QueryLogConfig `yaml:"queryLog"`
+	Upstream                []string          `yaml:"upstream"`
+	DoTUpstream             string            `yaml:"dotUpstream"`
+	EnableDoT               bool              `yaml:"enableDoT"`
+	BlocklistURLs           []string          `yaml:"blocklistUrls"`
+	BlocklistUpdateSchedule string            `yaml:"blocklistUpdateSchedule"`
+	CacheSize               int               `yaml:"cacheSize"`
+	QueryLog                QueryLogConfig    `yaml:"queryLog"`
+	StaticRecords           []StaticDNSRecord `yaml:"staticRecords,omitempty"`
+}
+
+type StaticDNSRecord struct {
+	// Name is the FQDN (e.g. "printer.hermes.lan").
+	Name string `yaml:"name"`
+	// IP is the A record target.
+	IP string `yaml:"ip"`
+	// LocalZone, when true, also emits `local-zone "Name." typetransparent`
+	// so split-DNS works: queries under this name fall through to upstream
+	// when no local-data matches.
+	LocalZone bool `yaml:"localZone,omitempty"`
 }
 
 type QueryLogConfig struct {

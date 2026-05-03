@@ -3,12 +3,18 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 
+	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
+	"github.com/KilimcininKorOglu/home-router/internal/netutil"
 	"github.com/KilimcininKorOglu/home-router/internal/services"
 	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
 )
+
+var dnsNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.-]{0,251}[a-zA-Z0-9]$`)
 
 type DNSHandler struct {
 	renderer *tmpl.Renderer
@@ -39,8 +45,9 @@ func (h *DNSHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 		Lang: lang,
 		Page: "dns",
 		Data: map[string]any{
-			"Stats":   stats,
-			"Queries": queries,
+			"Stats":         stats,
+			"Queries":       queries,
+			"StaticRecords": h.dns.GetStaticRecords(),
 		},
 	}
 
@@ -69,6 +76,60 @@ func (h *DNSHandler) HandleUpdateBlocklist(w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/dns", http.StatusSeeOther)
+}
+
+func (h *DNSHandler) HandleAddRecord(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	name := strings.TrimSpace(r.FormValue("name"))
+	ip := strings.TrimSpace(r.FormValue("ip"))
+	localZone := r.FormValue("local_zone") == "on"
+
+	if !dnsNamePattern.MatchString(name) {
+		http.Error(w, "invalid DNS name", http.StatusBadRequest)
+		return
+	}
+	if netutil.ValidateIP(ip) != nil {
+		http.Error(w, "invalid IP address", http.StatusBadRequest)
+		return
+	}
+
+	rec := config.StaticDNSRecord{Name: name, IP: ip, LocalZone: localZone}
+	if err := h.dns.AddStaticRecord(rec); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := h.dns.ApplyConfig(r.Context()); err != nil {
+		log.Printf("dns apply after add record: %v", err)
+	}
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/dns", http.StatusSeeOther)
+}
+
+func (h *DNSHandler) HandleDeleteRecord(w http.ResponseWriter, r *http.Request) {
+	idx, err := strconv.Atoi(r.PathValue("index"))
+	if err != nil {
+		http.Error(w, "invalid index", http.StatusBadRequest)
+		return
+	}
+	if err := h.dns.RemoveStaticRecord(idx); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := h.dns.ApplyConfig(r.Context()); err != nil {
+		log.Printf("dns apply after delete record: %v", err)
+	}
+
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Refresh", "true")
 		w.WriteHeader(http.StatusOK)
