@@ -220,6 +220,20 @@ func (s *DHCPService) Reload(ctx context.Context) error {
 	return nil
 }
 
+// RenderToDisk renders /etc/dnsmasq.conf without reloading. Suitable for
+// install-time invocation.
+func (s *DHCPService) RenderToDisk(ctx context.Context) error {
+	return s.RenderConfig()
+}
+
+// ApplyConfig renders to disk and reloads dnsmasq. Use at runtime.
+func (s *DHCPService) ApplyConfig(ctx context.Context) error {
+	if err := s.RenderToDisk(ctx); err != nil {
+		return err
+	}
+	return s.Reload(ctx)
+}
+
 func (s *DHCPService) GetStaticLeases() []config.StaticLease {
 	return s.cfg.DHCP.StaticLeases
 }

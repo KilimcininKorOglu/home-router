@@ -190,8 +190,7 @@ func (s *VPNService) ServerStatus(ctx context.Context) (*WGServerStatus, error) 
 }
 
 func (s *VPNService) ServerUp(ctx context.Context) error {
-	confPath := "/etc/wireguard/wgs0.conf"
-	if err := s.renderServerConfig(confPath); err != nil {
+	if err := s.RenderServerConfig(ctx); err != nil {
 		return err
 	}
 	_, err := netutil.Run(ctx, "wg-quick", "up", "wgs0")
@@ -201,6 +200,26 @@ func (s *VPNService) ServerUp(ctx context.Context) error {
 func (s *VPNService) ServerDown(ctx context.Context) error {
 	_, err := netutil.Run(ctx, "wg-quick", "down", "wgs0")
 	return err
+}
+
+// RenderServerConfig writes /etc/wireguard/wgs0.conf without bringing the
+// interface up. Suitable for install-time invocation by `render-configs`.
+func (s *VPNService) RenderServerConfig(ctx context.Context) error {
+	return s.renderServerConfig("/etc/wireguard/wgs0.conf")
+}
+
+// RenderAllClientConfigs writes /etc/wireguard/wgN.conf for every client
+// tunnel in the config without bringing them up. Suitable for install-time.
+func (s *VPNService) RenderAllClientConfigs(ctx context.Context) error {
+	for idx := range s.cfg.VPN.Clients {
+		client := &s.cfg.VPN.Clients[idx]
+		iface := fmt.Sprintf("wg%d", idx)
+		confPath := filepath.Join("/etc/wireguard", iface+".conf")
+		if err := s.renderClientConfig(client, confPath); err != nil {
+			return fmt.Errorf("render client %s: %w", client.Name, err)
+		}
+	}
+	return nil
 }
 
 func (s *VPNService) AddPeer(ctx context.Context, name string, siteToSite bool, remoteSubnets []string, endpoint string) (*config.WGServerPeer, string, error) {

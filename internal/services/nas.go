@@ -88,21 +88,26 @@ func (s *NASService) RenderConfig() (string, error) {
 	return buf.String(), nil
 }
 
-func (s *NASService) ApplyConfig(ctx context.Context) error {
+// RenderToDisk renders /etc/samba/smb.conf without reloading. Suitable for
+// install-time invocation.
+func (s *NASService) RenderToDisk(ctx context.Context) error {
 	rendered, err := s.RenderConfig()
 	if err != nil {
 		return err
 	}
-
 	if err := netutil.WriteFile("/etc/samba/smb.conf", []byte(rendered), 0o644); err != nil {
 		return fmt.Errorf("write smb.conf: %w", err)
 	}
+	return nil
+}
 
-	_, err = netutil.Run(ctx, "smbcontrol", "all", "reload-config")
-	if err != nil {
+func (s *NASService) ApplyConfig(ctx context.Context) error {
+	if err := s.RenderToDisk(ctx); err != nil {
+		return err
+	}
+	if _, err := netutil.Run(ctx, "smbcontrol", "all", "reload-config"); err != nil {
 		return fmt.Errorf("reload samba: %w", err)
 	}
-
 	log.Println("samba config reloaded")
 	return nil
 }

@@ -32,18 +32,25 @@ func (s *SyslogService) RenderConfig() (string, error) {
 	return buf.String(), nil
 }
 
-func (s *SyslogService) ApplyConfig(ctx context.Context) error {
+// RenderToDisk renders /etc/rsyslog.d/50-home-router.conf without reloading.
+// Suitable for install-time invocation.
+func (s *SyslogService) RenderToDisk(ctx context.Context) error {
 	rendered, err := s.RenderConfig()
 	if err != nil {
 		return err
 	}
-
 	confPath := "/etc/rsyslog.d/50-home-router.conf"
 	if err := netutil.WriteFile(confPath, []byte(rendered), 0o644); err != nil {
 		return fmt.Errorf("write rsyslog config: %w", err)
 	}
+	return nil
+}
 
-	_, err = netutil.Run(ctx, "systemctl", "reload", "rsyslog")
+func (s *SyslogService) ApplyConfig(ctx context.Context) error {
+	if err := s.RenderToDisk(ctx); err != nil {
+		return err
+	}
+	_, err := netutil.Run(ctx, "systemctl", "reload", "rsyslog")
 	return err
 }
 

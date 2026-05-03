@@ -117,17 +117,24 @@ func (s *NTPService) RenderConfig() (string, error) {
 	return buf.String(), nil
 }
 
-func (s *NTPService) ApplyConfig(ctx context.Context) error {
+// RenderToDisk renders /etc/chrony/chrony.conf without reloading. Suitable
+// for install-time invocation.
+func (s *NTPService) RenderToDisk(ctx context.Context) error {
 	rendered, err := s.RenderConfig()
 	if err != nil {
 		return err
 	}
-
 	if err := netutil.WriteFile("/etc/chrony/chrony.conf", []byte(rendered), 0o644); err != nil {
 		return fmt.Errorf("write chrony config: %w", err)
 	}
+	return nil
+}
 
-	_, err = netutil.Run(ctx, "systemctl", "reload", "chronyd")
+func (s *NTPService) ApplyConfig(ctx context.Context) error {
+	if err := s.RenderToDisk(ctx); err != nil {
+		return err
+	}
+	_, err := netutil.Run(ctx, "systemctl", "reload", "chronyd")
 	return err
 }
 

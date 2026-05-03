@@ -121,6 +121,22 @@ func (s *DNSService) RenderConfig() error {
 	return netutil.WriteFile("/etc/unbound/unbound.conf", buf.Bytes(), 0o644)
 }
 
+// RenderToDisk renders the unbound configuration to /etc/unbound/unbound.conf
+// without reloading the service. Suitable for install-time invocation by the
+// `home-router render-configs` subcommand.
+func (s *DNSService) RenderToDisk(ctx context.Context) error {
+	return s.RenderConfig()
+}
+
+// ApplyConfig renders to disk and reloads unbound. Use at runtime when the
+// service is already up.
+func (s *DNSService) ApplyConfig(ctx context.Context) error {
+	if err := s.RenderToDisk(ctx); err != nil {
+		return err
+	}
+	return s.Reload(ctx)
+}
+
 func (s *DNSService) Reload(ctx context.Context) error {
 	_, err := netutil.Run(ctx, "unbound-control", "reload")
 	if err != nil {
