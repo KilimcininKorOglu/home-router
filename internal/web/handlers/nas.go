@@ -5,6 +5,7 @@ import (
 	"html"
 	"log"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -56,7 +57,7 @@ func (h *NASHandler) HandleAddShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	path := r.FormValue("path")
+	path := filepath.Clean(r.FormValue("path"))
 	if path == "" {
 		http.Error(w, "path required", http.StatusBadRequest)
 		return
