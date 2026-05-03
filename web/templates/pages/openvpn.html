@@ -115,7 +115,10 @@
                 <span style="color:var(--text-secondary); font-size:var(--font-xs); margin-left:var(--space-sm);">{{ .RemoteHost }}:{{ .RemotePort }}</span>
                 {{ end }}
             </div>
-            <button class="btn btn-primary btn-sm" hx-post="/openvpn/client/{{ .Name }}/connect" hx-swap="none">{{ t $.Lang "pppoe.connect" }}</button>
+            <div style="display:flex; gap:var(--space-sm);">
+                <button class="btn btn-primary btn-sm" hx-post="/openvpn/client/{{ .Name }}/connect" hx-swap="none">{{ t $.Lang "pppoe.connect" }}</button>
+                <button class="btn btn-danger btn-sm" hx-post="/openvpn/client/{{ .Name }}/disconnect" hx-swap="none">{{ t $.Lang "pppoe.disconnect" }}</button>
+            </div>
         </div>
         {{ end }}
         {{ end }}
