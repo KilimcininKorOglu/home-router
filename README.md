@@ -119,8 +119,8 @@ Two-process privilege separation: the web process never runs as root. All privil
 
 | Module                        | Version | Purpose                                                   |
 |-------------------------------|---------|-----------------------------------------------------------|
-| `gopkg.in/yaml.v3`           | v3.0.1  | YAML config parsing and serialization (`router.yaml`)     |
-| `golang.org/x/crypto`        | v0.50.0 | bcrypt password hashing, scrypt key derivation for backup |
+| `gopkg.in/yaml.v3`            | v3.0.1  | YAML config parsing and serialization (`router.yaml`)     |
+| `golang.org/x/crypto`         | v0.50.0 | bcrypt password hashing, scrypt key derivation for backup |
 | `github.com/gorilla/sessions` | v1.4.0  | Secure cookie-based HTTP session management               |
 
 No frontend build tools, no npm, no ORM, no database driver. The web frontend uses embedded HTMX with vanilla JavaScript.
