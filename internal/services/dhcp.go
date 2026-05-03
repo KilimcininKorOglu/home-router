@@ -229,6 +229,14 @@ func (s *DHCPService) persist() error {
 }
 
 func (s *DHCPService) AddStaticLease(mac, ip, hostname string) error {
+	for _, l := range s.cfg.DHCP.StaticLeases {
+		if strings.EqualFold(l.MAC, mac) {
+			return fmt.Errorf("MAC address %s already has a static lease", mac)
+		}
+		if l.IP == ip {
+			return fmt.Errorf("IP address %s already reserved", ip)
+		}
+	}
 	s.cfg.DHCP.StaticLeases = append(s.cfg.DHCP.StaticLeases, config.StaticLease{
 		MAC:      mac,
 		IP:       ip,
