@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,6 +52,7 @@ type UpdateInfo struct {
 	LatestVersion  string `json:"latestVersion"`
 	ReleaseNotes   string `json:"releaseNotes"`
 	DownloadURL    string `json:"downloadURL"`
+	ChecksumURL    string `json:"checksumURL,omitempty"`
 	PublishedAt    string `json:"publishedAt"`
 	AssetSize      int64  `json:"assetSize"`
 }
@@ -130,7 +133,9 @@ func (s *UpdateService) CheckForUpdate(ctx context.Context) (*UpdateInfo, error)
 		if strings.Contains(asset.Name, "linux-amd64") && strings.HasSuffix(asset.Name, ".tar.gz") {
 			info.DownloadURL = asset.BrowserDownloadURL
 			info.AssetSize = asset.Size
-			break
+		}
+		if asset.Name == "SHA256SUMS" || asset.Name == "checksums.txt" {
+			info.ChecksumURL = asset.BrowserDownloadURL
 		}
 	}
 
@@ -162,6 +167,10 @@ func (s *UpdateService) ApplyUpdate(ctx context.Context, info *UpdateInfo) error
 		return fmt.Errorf("download: %w", err)
 	}
 	defer os.Remove(tmpArchive)
+
+	if err := s.verifyChecksum(ctx, info, tmpArchive); err != nil {
+		return fmt.Errorf("checksum verification: %w", err)
+	}
 
 	tmpBinary := "/tmp/home-router-new"
 	if err := s.extractBinary(tmpArchive, tmpBinary); err != nil {
@@ -343,6 +352,66 @@ func CompareSemver(a, b string) int {
 		}
 	}
 	return 0
+}
+
+func (s *UpdateService) verifyChecksum(ctx context.Context, info *UpdateInfo, archivePath string) error {
+	if info.ChecksumURL == "" {
+		log.Println("update: no checksum file in release, skipping verification")
+		return nil
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", info.ChecksumURL, nil)
+	if err != nil {
+		return fmt.Errorf("create checksum request: %w", err)
+	}
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("download checksum file: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("checksum file returned HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
+		return fmt.Errorf("read checksum file: %w", err)
+	}
+
+	archiveName := filepath.Base(archivePath)
+	var expectedHash string
+	for _, line := range strings.Split(string(body), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && strings.Contains(fields[1], archiveName) {
+			expectedHash = strings.ToLower(fields[0])
+			break
+		}
+	}
+
+	if expectedHash == "" {
+		return fmt.Errorf("no checksum found for %s in release checksum file", archiveName)
+	}
+
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return fmt.Errorf("open archive for checksum: %w", err)
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fmt.Errorf("hash archive: %w", err)
+	}
+	actualHash := hex.EncodeToString(h.Sum(nil))
+
+	if actualHash != expectedHash {
+		return fmt.Errorf("SHA-256 mismatch: expected %s, got %s", expectedHash, actualHash)
+	}
+
+	log.Printf("update: SHA-256 verified for %s", archiveName)
+	return nil
 }
 
 func parseSemver(v string) [3]int {
