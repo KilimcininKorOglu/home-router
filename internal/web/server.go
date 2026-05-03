@@ -193,6 +193,13 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	log.Printf("web server listening on %s (TLS mode: %s)", s.http.Addr, s.cfg.System.TLS.Mode)
 
+	dataDir := "/var/lib/home-router"
+	certInfo, err := config.EnsureTLSCert(&s.cfg.System.TLS, dataDir)
+	if err != nil {
+		return fmt.Errorf("ensure TLS cert: %w", err)
+	}
+	log.Printf("TLS certificate ready: %s (expires: %s)", certInfo.Issuer, certInfo.NotAfter)
+
 	certFile := s.cfg.System.TLS.CertFile
 	keyFile := s.cfg.System.TLS.KeyFile
 	if certFile == "" {
@@ -202,7 +209,7 @@ func (s *Server) Serve(ctx context.Context) error {
 		keyFile = "/var/lib/home-router/tls/server.key"
 	}
 
-	err := s.http.ListenAndServeTLS(certFile, keyFile)
+	err = s.http.ListenAndServeTLS(certFile, keyFile)
 	if err == http.ErrServerClosed {
 		return nil
 	}
