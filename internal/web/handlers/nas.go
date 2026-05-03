@@ -79,6 +79,9 @@ func (h *NASHandler) HandleAddShare(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "save failed", http.StatusInternalServerError)
 		return
 	}
+	if err := h.nas.ApplyConfig(r.Context()); err != nil {
+		log.Printf("nas apply after add share: %v", err)
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Refresh", "true")
@@ -93,6 +96,9 @@ func (h *NASHandler) HandleDeleteShare(w http.ResponseWriter, r *http.Request) {
 	if err := h.nas.RemoveShare(name); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if err := h.nas.ApplyConfig(r.Context()); err != nil {
+		log.Printf("nas apply after delete share: %v", err)
 	}
 
 	if r.Header.Get("HX-Request") == "true" {

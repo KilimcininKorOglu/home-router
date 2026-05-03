@@ -104,3 +104,69 @@ func (h *VPNHandler) HandleRemovePeer(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, "/vpn", http.StatusSeeOther)
 }
+
+func (h *VPNHandler) HandleServerStart(w http.ResponseWriter, r *http.Request) {
+	if err := h.vpn.ServerUp(r.Context()); err != nil {
+		log.Printf("vpn server start: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/vpn", http.StatusSeeOther)
+}
+
+func (h *VPNHandler) HandleServerStop(w http.ResponseWriter, r *http.Request) {
+	if err := h.vpn.ServerDown(r.Context()); err != nil {
+		log.Printf("vpn server stop: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/vpn", http.StatusSeeOther)
+}
+
+func (h *VPNHandler) HandleConnectClient(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if !vpnNamePattern.MatchString(name) {
+		http.Error(w, "invalid client name", http.StatusBadRequest)
+		return
+	}
+	if err := h.vpn.ConnectClient(r.Context(), name); err != nil {
+		log.Printf("vpn connect %s: %v", name, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/vpn", http.StatusSeeOther)
+}
+
+func (h *VPNHandler) HandleDisconnectClient(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if !vpnNamePattern.MatchString(name) {
+		http.Error(w, "invalid client name", http.StatusBadRequest)
+		return
+	}
+	if err := h.vpn.DisconnectClient(r.Context(), name); err != nil {
+		log.Printf("vpn disconnect %s: %v", name, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/vpn", http.StatusSeeOther)
+}

@@ -64,6 +64,9 @@ func (h *DHCPHandler) HandleAddStatic(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "save failed", http.StatusInternalServerError)
 		return
 	}
+	if err := h.dhcp.ApplyConfig(r.Context()); err != nil {
+		log.Printf("dhcp apply after add: %v", err)
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Refresh", "true")
@@ -83,6 +86,9 @@ func (h *DHCPHandler) HandleDeleteStatic(w http.ResponseWriter, r *http.Request)
 	if err := h.dhcp.RemoveStaticLease(idx); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if err := h.dhcp.ApplyConfig(r.Context()); err != nil {
+		log.Printf("dhcp apply after delete: %v", err)
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
