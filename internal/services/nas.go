@@ -37,10 +37,15 @@ type M3USyncStatus struct {
 
 var m3uStatus M3USyncStatus
 
+func (s *NASService) persist() error {
+	return s.cfg.SaveToFile()
+}
+
 func (s *NASService) AddShare(share config.ShareConfig) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cfg.NAS.Shares = append(s.cfg.NAS.Shares, share)
+	s.persist()
 }
 
 func (s *NASService) RemoveShare(name string) error {
@@ -50,7 +55,7 @@ func (s *NASService) RemoveShare(name string) error {
 	for i, sh := range s.cfg.NAS.Shares {
 		if sh.Name == name {
 			s.cfg.NAS.Shares = append(s.cfg.NAS.Shares[:i], s.cfg.NAS.Shares[i+1:]...)
-			return nil
+			return s.persist()
 		}
 	}
 	return fmt.Errorf("share %q not found", name)
