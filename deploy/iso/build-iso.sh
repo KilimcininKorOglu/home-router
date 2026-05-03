@@ -93,6 +93,12 @@ cp "$PROJECT_ROOT/configs/defaults"/*.yaml "$BUILD_DIR/iso/configs/defaults/" 2>
 mkdir -p "$BUILD_DIR/iso/configs/sysconf"
 cp "$PROJECT_ROOT/configs/sysconf"/*.tmpl "$BUILD_DIR/iso/configs/sysconf/" 2>/dev/null || true
 
+mkdir -p "$BUILD_DIR/iso/systemd"
+cp "$PROJECT_ROOT/deploy/systemd"/*.service "$BUILD_DIR/iso/systemd/" 2>/dev/null || true
+cp "$PROJECT_ROOT/deploy/systemd"/*.target "$BUILD_DIR/iso/systemd/" 2>/dev/null || true
+
+cp "$PROJECT_ROOT/deploy/dhcp-dns-update.sh" "$BUILD_DIR/iso/dhcp-dns-update.sh" 2>/dev/null || true
+
 echo "[5/7] Updating GRUB config..."
 if [[ -f "$BUILD_DIR/iso/boot/grub/grub.cfg" ]]; then
     cp "$BUILD_DIR/iso/boot/grub/grub.cfg" "$BUILD_DIR/iso/boot/grub/grub.cfg.orig"

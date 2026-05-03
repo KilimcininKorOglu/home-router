@@ -55,7 +55,8 @@ install_dependencies() {
         qrencode \
         wide-dhcpv6-client \
         curl \
-        jq
+        jq \
+        hdparm
 
     log_info "Dependencies installed"
 }
@@ -311,6 +312,11 @@ print_summary() {
 setup_dhcp_dns_script() {
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    if [[ ! -f "$script_dir/dhcp-dns-update.sh" ]]; then
+        log_warn "dhcp-dns-update.sh not found at $script_dir, skipping"
+        return
+    fi
 
     mkdir -p /usr/local/lib/home-router
     cp "$script_dir/dhcp-dns-update.sh" /usr/local/lib/home-router/

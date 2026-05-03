@@ -7,35 +7,49 @@ CONFIG_DIR="/etc/home-router"
 DATA_DIR="/var/lib/home-router"
 LOG_DIR="/var/log/home-router"
 SYSTEMD_DIR="/etc/systemd/system"
+SERVICE_USER="homerouter"
 
 echo "=== Home Router Kurulum Sonrası / Post-Install ==="
 
 # Install packages from local ISO repo
 if [[ -d /cdrom/pool/extra ]] && [[ -f /cdrom/pool/extra/Packages ]]; then
     echo "deb [trusted=yes] file:///cdrom/pool extra/" > /etc/apt/sources.list.d/home-router-local.list
-    apt-get update -qq 2>/dev/null || true
+    apt-get update -qq || true
     apt-get install -y -qq \
         ppp pppoe nftables wireguard-tools openvpn easy-rsa \
         samba samba-common-bin smartmontools mdadm iproute2 \
         unbound dnsmasq rsyslog chrony qrencode \
         wide-dhcpv6-client curl jq hdparm \
-        2>/dev/null || echo "UYARI / WARN: Bazı paketler kurulamadı / Some packages may not have installed"
+        || echo "UYARI / WARN: Bazı paketler kurulamadı / Some packages may not have installed"
     rm -f /etc/apt/sources.list.d/home-router-local.list
+fi
+
+# Ensure homerouter system user exists (d-i creates an interactive user; if
+# missing for any reason, fall back to a system account).
+if ! id "$SERVICE_USER" &>/dev/null; then
+    useradd --system --no-create-home --home-dir /opt/home-router \
+        --shell /usr/sbin/nologin "$SERVICE_USER"
 fi
 
 # Install binary
 cp /tmp/home-router "$INSTALL_DIR/$BINARY_NAME"
 chmod +x "$INSTALL_DIR/$BINARY_NAME"
 
-# Create directories
+# Create directories with correct ownership for the homerouter service user.
+# The web service runs as homerouter and must be able to write TLS certs,
+# credentials, backups, and logs.
 mkdir -p "$CONFIG_DIR"
 chmod 750 "$CONFIG_DIR"
-chown root:homerouter "$CONFIG_DIR" 2>/dev/null || true
+chown root:"$SERVICE_USER" "$CONFIG_DIR" 2>/dev/null || true
 mkdir -p "$DATA_DIR/tls"
 mkdir -p "$DATA_DIR/credentials"
 mkdir -p "$DATA_DIR/backups"
+mkdir -p "$DATA_DIR/sysconf"
 mkdir -p "$LOG_DIR"
+chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR" 2>/dev/null || true
+chown -R "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR" 2>/dev/null || true
 mkdir -p /var/log/unbound
+chown unbound:unbound /var/log/unbound 2>/dev/null || true
 mkdir -p /var/log/chrony
 
 # sysctl
@@ -55,12 +69,30 @@ net.ipv4.icmp_echo_ignore_broadcasts = 1
 net.ipv4.icmp_ignore_bogus_error_responses = 1
 SYSCTL
 
+# Apply sysctl immediately
+sysctl -p /etc/sysctl.d/99-home-router.conf >/dev/null 2>&1 || true
+
 # udev rules
 cat > /etc/udev/rules.d/70-home-router.rules <<'UDEV'
+# USB tethering — Android RNDIS
 SUBSYSTEM=="net", ACTION=="add", DRIVER=="rndis_host", NAME="usb0"
 UDEV
+udevadm control --reload-rules 2>/dev/null || true
 
-# systemd units (embedded in binary or copied from ISO)
+# DHCP-DNS update helper script
+if [[ -f /tmp/dhcp-dns-update.sh ]]; then
+    mkdir -p /usr/local/lib/home-router
+    cp /tmp/dhcp-dns-update.sh /usr/local/lib/home-router/
+    chmod +x /usr/local/lib/home-router/dhcp-dns-update.sh
+fi
+
+# Sysconf templates (used by services to render /etc configs at runtime)
+if [[ -d /tmp/configs/sysconf ]]; then
+    cp /tmp/configs/sysconf/*.tmpl "$DATA_DIR/sysconf/" 2>/dev/null || true
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR/sysconf" 2>/dev/null || true
+fi
+
+# systemd units (copied from ISO or embedded inline as fallback)
 if [[ -d /tmp/systemd ]]; then
     cp /tmp/systemd/*.service "$SYSTEMD_DIR/"
     cp /tmp/systemd/*.target "$SYSTEMD_DIR/"
@@ -124,12 +156,16 @@ fi
 systemctl daemon-reload
 systemctl enable home-router.target
 
-# Default config
+# Default config — copy YAML defaults from ISO. Without these, router.yaml
+# would never exist and the admin password / hostname sed steps below would
+# silently no-op.
 if [[ ! -f "$CONFIG_DIR/router.yaml" ]]; then
     if [[ -d /tmp/configs/defaults ]]; then
         cp /tmp/configs/defaults/*.yaml "$CONFIG_DIR/"
         chmod 640 "$CONFIG_DIR"/*.yaml
-        chown root:homerouter "$CONFIG_DIR"/*.yaml 2>/dev/null || true
+        chown root:"$SERVICE_USER" "$CONFIG_DIR"/*.yaml 2>/dev/null || true
+    else
+        echo "UYARI / WARN: Default config'ler bulunamadı / Default configs not found at /tmp/configs/defaults"
     fi
 fi
 
@@ -162,6 +198,17 @@ systemctl stop dnsmasq 2>/dev/null || true
 # SSH hardening — root login allowed (password set during install), LAN only via nftables
 sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
 sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+# Generate initial self-signed TLS certificate so the web service can start
+# immediately on first boot. The binary creates the cert under $DATA_DIR/tls
+# during a brief startup; we then stop it.
+if [[ ! -f "$DATA_DIR/tls/server.crt" ]] && [[ -f "$CONFIG_DIR/router.yaml" ]]; then
+    su -s /bin/sh -c "$INSTALL_DIR/$BINARY_NAME serve --config $CONFIG_DIR/router.yaml" "$SERVICE_USER" &
+    TLS_PID=$!
+    sleep 2
+    kill "$TLS_PID" 2>/dev/null || true
+    wait "$TLS_PID" 2>/dev/null || true
+fi
 
 echo "=== Kurulum tamamlandı / Post-install complete ==="
 echo "Sistem Home Router olarak yeniden başlatılacak. / System will reboot into Home Router."
