@@ -1,10 +1,14 @@
 package services
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/KilimcininKorOglu/home-router/internal/netutil"
@@ -37,14 +41,54 @@ func (s *BackupService) Export(ctx context.Context, outputPath string) error {
 }
 
 func (s *BackupService) Import(ctx context.Context, archivePath string) error {
-	if _, err := os.Stat(archivePath); err != nil {
-		return fmt.Errorf("backup file not found: %w", err)
-	}
-
-	_, err := netutil.Run(ctx, "tar", "xzf", archivePath,
-		"-C", filepath.Dir(s.configDir))
+	f, err := os.Open(archivePath)
 	if err != nil {
-		return fmt.Errorf("extract backup: %w", err)
+		return fmt.Errorf("open backup: %w", err)
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return fmt.Errorf("gzip reader: %w", err)
+	}
+	defer gz.Close()
+
+	destRoot := filepath.Dir(s.configDir)
+	tr := tar.NewReader(gz)
+
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("read tar header: %w", err)
+		}
+
+		clean := filepath.Clean(hdr.Name)
+		if strings.Contains(clean, "..") || filepath.IsAbs(clean) {
+			return fmt.Errorf("unsafe tar member rejected: %s", hdr.Name)
+		}
+
+		target := filepath.Join(destRoot, clean)
+		if !strings.HasPrefix(target, destRoot+string(os.PathSeparator)) && target != destRoot {
+			return fmt.Errorf("tar member escapes destination: %s", hdr.Name)
+		}
+
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			netutil.MkdirAll(target, os.FileMode(hdr.Mode)|0o755)
+		case tar.TypeReg:
+			data, err := io.ReadAll(io.LimitReader(tr, 10<<20))
+			if err != nil {
+				return fmt.Errorf("read tar member %s: %w", hdr.Name, err)
+			}
+			if err := netutil.WriteFile(target, data, os.FileMode(hdr.Mode)); err != nil {
+				return fmt.Errorf("write tar member %s: %w", hdr.Name, err)
+			}
+		default:
+			return fmt.Errorf("unsupported tar member type %d: %s", hdr.Typeflag, hdr.Name)
+		}
 	}
 
 	return nil
