@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -277,17 +278,16 @@ func (s *OpenVPNService) RenderServerConfig() error {
 		}
 	}
 
-	os.MkdirAll("/etc/openvpn", 0o755)
-	os.MkdirAll("/etc/openvpn/ccd", 0o755)
+	netutil.MkdirAll("/etc/openvpn", 0o755)
+	netutil.MkdirAll("/etc/openvpn/ccd", 0o755)
 
-	f, err := os.Create("/etc/openvpn/server.conf")
-	if err != nil {
-		return fmt.Errorf("create server.conf: %w", err)
-	}
-	defer f.Close()
-
-	if err := tmpl.Execute(f, data); err != nil {
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
 		return fmt.Errorf("render server.conf: %w", err)
+	}
+
+	if err := netutil.WriteFile("/etc/openvpn/server.conf", buf.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("write server.conf: %w", err)
 	}
 
 	for _, client := range srv.Clients {
@@ -303,7 +303,7 @@ func (s *OpenVPNService) RenderServerConfig() error {
 
 func (s *OpenVPNService) writeCCD(entry config.OVPNClientEntry) error {
 	ccdDir := "/etc/openvpn/ccd"
-	os.MkdirAll(ccdDir, 0o755)
+	netutil.MkdirAll(ccdDir, 0o755)
 
 	var sb strings.Builder
 
@@ -338,7 +338,7 @@ func (s *OpenVPNService) writeCCD(entry config.OVPNClientEntry) error {
 		cn = entry.Name
 	}
 
-	return os.WriteFile(filepath.Join(ccdDir, cn), []byte(sb.String()), 0o644)
+	return netutil.WriteFile(filepath.Join(ccdDir, cn), []byte(sb.String()), 0o644)
 }
 
 func cidrToIPMask(cidr string) (string, string) {
@@ -400,21 +400,13 @@ func (s *OpenVPNService) ListOutboundClients() []config.OVPNClientConfig {
 
 func (s *OpenVPNService) renderClientConfig(c config.OVPNClientConfig, confPath string) error {
 	if c.ConfigFile != "" {
-		return os.WriteFile(confPath, []byte(c.ConfigFile), 0o600)
+		return netutil.WriteFile(confPath, []byte(c.ConfigFile), 0o600)
 	}
 
 	tmpl, err := template.ParseFiles("configs/sysconf/openvpn-client.conf.tmpl")
 	if err != nil {
 		return fmt.Errorf("parse openvpn client template: %w", err)
 	}
-
-	os.MkdirAll(filepath.Dir(confPath), 0o700)
-	f, err := os.Create(confPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	os.Chmod(confPath, 0o600)
 
 	if c.RemotePort == 0 {
 		c.RemotePort = 1194
@@ -429,14 +421,19 @@ func (s *OpenVPNService) renderClientConfig(c config.OVPNClientConfig, confPath 
 		c.Auth = "SHA256"
 	}
 
-	if err := tmpl.Execute(f, c); err != nil {
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, c); err != nil {
 		return fmt.Errorf("render client config: %w", err)
+	}
+
+	if err := netutil.WriteFile(confPath, buf.Bytes(), 0o600); err != nil {
+		return err
 	}
 
 	if c.Username != "" && c.Password != "" {
 		authPath := fmt.Sprintf("/etc/openvpn/client/%s-auth.txt", c.Name)
 		authContent := fmt.Sprintf("%s\n%s\n", c.Username, c.Password)
-		os.WriteFile(authPath, []byte(authContent), 0o600)
+		netutil.WriteFile(authPath, []byte(authContent), 0o600)
 	}
 
 	return nil
@@ -446,7 +443,7 @@ func (s *OpenVPNService) ConnectClient(ctx context.Context, name string) error {
 	for _, c := range s.cfg.OpenVPN.Clients {
 		if c.Name == name {
 			confPath := fmt.Sprintf("/etc/openvpn/client/%s.conf", name)
-			os.MkdirAll("/etc/openvpn/client", 0o700)
+			netutil.MkdirAll("/etc/openvpn/client", 0o700)
 
 			if err := s.renderClientConfig(c, confPath); err != nil {
 				return fmt.Errorf("render client config: %w", err)

@@ -1,10 +1,10 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -327,15 +327,12 @@ func (s *VPNService) renderClientConfig(client *config.WGClientTunnel, path stri
 		return fmt.Errorf("parse wg client template: %w", err)
 	}
 
-	os.MkdirAll(filepath.Dir(path), 0o700)
-	f, err := os.Create(path)
-	if err != nil {
-		return err
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, client); err != nil {
+		return fmt.Errorf("render wg client config: %w", err)
 	}
-	defer f.Close()
-	os.Chmod(path, 0o600)
 
-	return tmpl.Execute(f, client)
+	return netutil.WriteFile(path, buf.Bytes(), 0o600)
 }
 
 func (s *VPNService) renderServerConfig(path string) error {
@@ -343,14 +340,6 @@ func (s *VPNService) renderServerConfig(path string) error {
 	if err != nil {
 		return fmt.Errorf("parse wg server template: %w", err)
 	}
-
-	os.MkdirAll(filepath.Dir(path), 0o700)
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	os.Chmod(path, 0o600)
 
 	data := struct {
 		config.WGServerConfig
@@ -360,5 +349,10 @@ func (s *VPNService) renderServerConfig(path string) error {
 		Peers:          s.cfg.VPN.Server.Peers,
 	}
 
-	return tmpl.Execute(f, data)
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return fmt.Errorf("render wg server config: %w", err)
+	}
+
+	return netutil.WriteFile(path, buf.Bytes(), 0o600)
 }
