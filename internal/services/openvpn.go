@@ -121,8 +121,15 @@ func (s *OpenVPNService) AddClient(ctx context.Context, name string, siteToSite 
 		log.Printf("write CCD for %s: %v", name, err)
 	}
 
+	s.persist()
 	log.Printf("OpenVPN client %q added (s2s=%v)", name, siteToSite)
 	return nil
+}
+
+func (s *OpenVPNService) persist() {
+	if err := s.cfg.SaveToFile(); err != nil {
+		log.Printf("persist openvpn config: %v", err)
+	}
 }
 
 func (s *OpenVPNService) RevokeClient(ctx context.Context, name string) error {
@@ -146,6 +153,7 @@ func (s *OpenVPNService) RevokeClient(ctx context.Context, name string) error {
 	}
 	s.mu.Unlock()
 
+	s.persist()
 	log.Printf("OpenVPN client %q revoked", name)
 	return nil
 }
@@ -382,12 +390,14 @@ func (s *OpenVPNService) ImportClientConfig(name, ovpnContent string) {
 		Name:       name,
 		ConfigFile: ovpnContent,
 	})
+	s.persist()
 }
 
 func (s *OpenVPNService) AddOutboundClient(client config.OVPNClientConfig) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cfg.OpenVPN.Clients = append(s.cfg.OpenVPN.Clients, client)
+	s.persist()
 }
 
 func (s *OpenVPNService) ListOutboundClients() []config.OVPNClientConfig {
