@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -68,7 +69,10 @@ func RunLocal(ctx context.Context, name string, args ...string) (*ExecResult, er
 	}
 
 	if err != nil {
-		return result, fmt.Errorf("exec %s: %w (stderr: %s)", name, err, stderr.String())
+		if stderr.Len() > 0 {
+			log.Printf("exec %s stderr: %s", name, stderr.String())
+		}
+		return result, fmt.Errorf("exec %s: %w", name, err)
 	}
 
 	return result, nil
@@ -145,7 +149,10 @@ func RunWithEnv(ctx context.Context, env []string, name string, args ...string) 
 		result.ExitCode = cmd.ProcessState.ExitCode()
 	}
 	if err != nil {
-		return result, fmt.Errorf("exec %s: %w (stderr: %s)", name, err, stderr.String())
+		if stderr.Len() > 0 {
+			log.Printf("exec %s stderr: %s", name, stderr.String())
+		}
+		return result, fmt.Errorf("exec %s: %w", name, err)
 	}
 	return result, nil
 }
