@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# nullglob: unmatched globs expand to empty (not literal). Prevents
+# `cp /path/*.yaml dest/` from failing when no files match.
+shopt -s nullglob
+
 BINARY_NAME="home-router"
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/home-router"
@@ -88,14 +92,21 @@ fi
 
 # Sysconf templates (used by services to render /etc configs at runtime)
 if [[ -d /tmp/configs/sysconf ]]; then
-    cp /tmp/configs/sysconf/*.tmpl "$DATA_DIR/sysconf/" 2>/dev/null || true
-    chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR/sysconf" 2>/dev/null || true
+    sysconf_files=( /tmp/configs/sysconf/*.tmpl )
+    if [[ ${#sysconf_files[@]} -gt 0 ]]; then
+        cp "${sysconf_files[@]}" "$DATA_DIR/sysconf/"
+        chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR/sysconf" 2>/dev/null || true
+    else
+        echo "UYARI / WARN: sysconf şablonları boş / sysconf templates empty"
+    fi
 fi
 
 # systemd units (copied from ISO or embedded inline as fallback)
-if [[ -d /tmp/systemd ]]; then
-    cp /tmp/systemd/*.service "$SYSTEMD_DIR/"
-    cp /tmp/systemd/*.target "$SYSTEMD_DIR/"
+unit_services=( /tmp/systemd/*.service )
+unit_targets=( /tmp/systemd/*.target )
+if [[ -d /tmp/systemd ]] && [[ ${#unit_services[@]} -gt 0 ]]; then
+    cp "${unit_services[@]}" "$SYSTEMD_DIR/"
+    [[ ${#unit_targets[@]} -gt 0 ]] && cp "${unit_targets[@]}" "$SYSTEMD_DIR/"
 else
     cat > "$SYSTEMD_DIR/home-router-agent.service" <<'UNIT'
 [Unit]
@@ -152,16 +163,17 @@ WantedBy=multi-user.target
 UNIT
 fi
 
-# Enable services
-systemctl daemon-reload
-systemctl enable home-router.target
+# Enable services. systemctl in d-i chroot can fail in unusual setups; tolerate.
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable home-router.target 2>/dev/null || true
 
 # Default config — copy YAML defaults from ISO. Without these, router.yaml
 # would never exist and the admin password / hostname sed steps below would
 # silently no-op.
 if [[ ! -f "$CONFIG_DIR/router.yaml" ]]; then
-    if [[ -d /tmp/configs/defaults ]]; then
-        cp /tmp/configs/defaults/*.yaml "$CONFIG_DIR/"
+    default_yamls=( /tmp/configs/defaults/*.yaml )
+    if [[ ${#default_yamls[@]} -gt 0 ]]; then
+        cp "${default_yamls[@]}" "$CONFIG_DIR/"
         chmod 640 "$CONFIG_DIR"/*.yaml
         chown root:"$SERVICE_USER" "$CONFIG_DIR"/*.yaml 2>/dev/null || true
     else
@@ -172,10 +184,18 @@ fi
 # Set admin password from installer
 if [[ -f /tmp/admin-password.txt ]]; then
     ADMIN_PASS=$(cat /tmp/admin-password.txt)
-    ADMIN_HASH=$("$INSTALL_DIR/$BINARY_NAME" hash-password "$ADMIN_PASS" 2>/dev/null || echo "")
-    if [[ -n "$ADMIN_HASH" && -f "$CONFIG_DIR/router.yaml" ]]; then
-        sed -i "s|adminPasswordHash:.*|adminPasswordHash: \"$ADMIN_HASH\"|" "$CONFIG_DIR/router.yaml"
-        echo "Yönetici şifresi ayarlandı. / Admin password set."
+    if [[ -z "$ADMIN_PASS" ]]; then
+        echo "UYARI / WARN: Yönetici şifresi boş, ayarlanmadı / Admin password empty, not set"
+    else
+        ADMIN_HASH=$("$INSTALL_DIR/$BINARY_NAME" hash-password "$ADMIN_PASS" 2>/dev/null || echo "")
+        if [[ -z "$ADMIN_HASH" ]]; then
+            echo "HATA / ERROR: Şifre hash'lenemedi / Failed to hash admin password"
+        elif [[ ! -f "$CONFIG_DIR/router.yaml" ]]; then
+            echo "HATA / ERROR: router.yaml yok, şifre yazılamadı / router.yaml missing, password not written"
+        else
+            sed -i "s|adminPasswordHash:.*|adminPasswordHash: \"$ADMIN_HASH\"|" "$CONFIG_DIR/router.yaml"
+            echo "Yönetici şifresi ayarlandı. / Admin password set."
+        fi
     fi
     rm -f /tmp/admin-password.txt
 fi
@@ -223,9 +243,14 @@ touch "$DATA_DIR/.first-boot"
 systemctl disable dnsmasq 2>/dev/null || true
 systemctl stop dnsmasq 2>/dev/null || true
 
-# SSH hardening — root login allowed (password set during install), LAN only via nftables
-sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
-sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+# SSH hardening — ensure PermitRootLogin yes / PasswordAuthentication yes
+# regardless of whether the line is currently commented or not. nftables
+# will restrict SSH to the LAN interface once the home-router agent applies
+# the firewall on first boot.
+sed -i -E 's|^[[:space:]]*#?[[:space:]]*PermitRootLogin[[:space:]].*|PermitRootLogin yes|' /etc/ssh/sshd_config
+sed -i -E 's|^[[:space:]]*#?[[:space:]]*PasswordAuthentication[[:space:]].*|PasswordAuthentication yes|' /etc/ssh/sshd_config
+grep -q '^PermitRootLogin ' /etc/ssh/sshd_config || echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+grep -q '^PasswordAuthentication ' /etc/ssh/sshd_config || echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
 
 # Generate initial self-signed TLS certificate so the web service can start
 # immediately on first boot. Run the binary as root briefly; EnsureTLSCert()

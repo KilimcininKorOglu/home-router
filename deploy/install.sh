@@ -89,12 +89,15 @@ setup_directories() {
     mkdir -p "$CONFIG_DIR"
     mkdir -p "$DATA_DIR/tls"
     mkdir -p "$DATA_DIR/credentials"
+    mkdir -p "$DATA_DIR/backups"
+    mkdir -p "$DATA_DIR/sysconf"
     mkdir -p "$LOG_DIR"
     mkdir -p /var/log/unbound
 
     chmod 750 "$CONFIG_DIR"
     chown root:"$SERVICE_USER" "$CONFIG_DIR"
-    chown "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR"
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR"
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR"
     chown unbound:unbound /var/log/unbound 2>/dev/null || true
 
     log_info "Created directories"
@@ -108,9 +111,13 @@ install_systemd_units() {
     cp "$script_dir/systemd/home-router-web.service" "$SYSTEMD_DIR/"
     cp "$script_dir/systemd/home-router.target" "$SYSTEMD_DIR/"
 
-    systemctl daemon-reload
-    systemctl enable home-router.target
-    log_info "Installed and enabled systemd units"
+    if ! systemctl daemon-reload; then
+        log_warn "systemctl daemon-reload failed (chroot or no dbus)"
+    fi
+    if ! systemctl enable home-router.target; then
+        log_warn "systemctl enable failed; will be enabled on first boot"
+    fi
+    log_info "Installed systemd units"
 }
 
 setup_sysctl() {
@@ -306,9 +313,13 @@ ask_keyboard() {
         *) kb="tr" ;;
     esac
 
-    localectl set-keymap "$kb" 2>/dev/null || \
-    loadkeys "$kb" 2>/dev/null || true
-    log_info "Klavye düzeni ayarlandı / Keyboard layout set to: $kb"
+    if localectl set-keymap "$kb" 2>/dev/null; then
+        log_info "Klavye düzeni ayarlandı / Keyboard layout set to: $kb"
+    elif loadkeys "$kb" 2>/dev/null; then
+        log_warn "loadkeys ile geçici ayarlandı (kalıcı değil) / set with loadkeys (not persistent): $kb"
+    else
+        log_warn "Klavye düzeni ayarlanamadı / Failed to set keyboard layout: $kb"
+    fi
 }
 
 print_summary() {
@@ -379,13 +390,16 @@ setup_initial_tls() {
     fi
 
     log_info "Generating initial self-signed TLS certificate..."
-    "$INSTALL_DIR/$BINARY_NAME" serve --config "$CONFIG_DIR/router.yaml" &
+    "$INSTALL_DIR/$BINARY_NAME" serve --config "$CONFIG_DIR/router.yaml" >/dev/null 2>&1 &
     local pid=$!
     sleep 2
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
 
     if [[ -f "$DATA_DIR/tls/server.crt" ]]; then
+        chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR/tls"
+        chmod 600 "$DATA_DIR/tls"/*.key 2>/dev/null || true
+        chmod 644 "$DATA_DIR/tls"/*.crt 2>/dev/null || true
         log_info "TLS certificate generated"
     else
         log_warn "TLS certificate generation deferred to first start"
