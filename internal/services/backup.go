@@ -69,7 +69,7 @@ func (s *BackupService) FactoryReset(ctx context.Context) error {
 		if err != nil {
 			continue
 		}
-		os.WriteFile(dst, data, 0o644)
+		netutil.WriteFile(dst, data, 0o644)
 	}
 
 	return nil

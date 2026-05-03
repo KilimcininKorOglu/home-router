@@ -89,7 +89,7 @@ func (s *NASService) ApplyConfig(ctx context.Context) error {
 		return err
 	}
 
-	if err := os.WriteFile("/etc/samba/smb.conf", []byte(rendered), 0o644); err != nil {
+	if err := netutil.WriteFile("/etc/samba/smb.conf", []byte(rendered), 0o644); err != nil {
 		return fmt.Errorf("write smb.conf: %w", err)
 	}
 
@@ -116,6 +116,12 @@ func (s *NASService) SyncM3U(ctx context.Context) error {
 	var totalItems, totalErrors int
 
 	for _, source := range s.cfg.NAS.M3USources {
+		if !strings.HasPrefix(source.DownloadPath, "/srv/") && !strings.HasPrefix(source.DownloadPath, "/mnt/") {
+			log.Printf("m3u download path rejected (must be under /srv/ or /mnt/): %s", source.DownloadPath)
+			totalErrors++
+			continue
+		}
+
 		items, err := downloadAndParseM3U(ctx, source.URL)
 		if err != nil {
 			log.Printf("m3u download %s: %v", source.URL, err)
