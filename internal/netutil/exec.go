@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -74,12 +75,18 @@ func RunLocal(ctx context.Context, name string, args ...string) (*ExecResult, er
 }
 
 type execParams struct {
-	Cmd  string   `json:"cmd"`
-	Args []string `json:"args"`
+	Cmd   string   `json:"cmd"`
+	Args  []string `json:"args"`
+	Stdin string   `json:"stdin,omitempty"`
+	Env   []string `json:"env,omitempty"`
 }
 
 func runViaAgent(ctx context.Context, name string, args ...string) (*ExecResult, error) {
-	params := execParams{Cmd: name, Args: args}
+	return runViaAgentFull(ctx, "", nil, name, args...)
+}
+
+func runViaAgentFull(ctx context.Context, stdin string, env []string, name string, args ...string) (*ExecResult, error) {
+	params := execParams{Cmd: name, Args: args, Stdin: stdin, Env: env}
 
 	raw, err := agentClient.Call(ctx, "exec.run", params)
 	if err != nil {
@@ -92,6 +99,55 @@ func runViaAgent(ctx context.Context, name string, args ...string) (*ExecResult,
 	}
 
 	return &result, nil
+}
+
+func RunWithStdin(ctx context.Context, stdin string, name string, args ...string) (string, error) {
+	if agentClient != nil {
+		result, err := runViaAgentFull(ctx, stdin, nil, name, args...)
+		if err != nil {
+			return "", err
+		}
+		return result.Stdout, nil
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultTimeout)
+		defer cancel()
+	}
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdin = strings.NewReader(stdin)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("exec %s: %w (stderr: %s)", name, err, stderr.String())
+	}
+	return stdout.String(), nil
+}
+
+func RunWithEnv(ctx context.Context, env []string, name string, args ...string) (*ExecResult, error) {
+	if agentClient != nil {
+		return runViaAgentFull(ctx, "", env, name, args...)
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultTimeout)
+		defer cancel()
+	}
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Env = append(os.Environ(), env...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	result := &ExecResult{Stdout: stdout.String(), Stderr: stderr.String()}
+	if cmd.ProcessState != nil {
+		result.ExitCode = cmd.ProcessState.ExitCode()
+	}
+	if err != nil {
+		return result, fmt.Errorf("exec %s: %w (stderr: %s)", name, err, stderr.String())
+	}
+	return result, nil
 }
 
 type fileWriteParams struct {

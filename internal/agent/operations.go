@@ -42,8 +42,10 @@ var allowedWritePaths = []string{
 }
 
 type ExecParams struct {
-	Cmd  string   `json:"cmd"`
-	Args []string `json:"args"`
+	Cmd   string   `json:"cmd"`
+	Args  []string `json:"args"`
+	Stdin string   `json:"stdin,omitempty"`
+	Env   []string `json:"env,omitempty"`
 }
 
 type ExecResult struct {
@@ -96,6 +98,13 @@ func opExecRun(ctx context.Context, raw json.RawMessage) (any, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+
+	if params.Stdin != "" {
+		cmd.Stdin = strings.NewReader(params.Stdin)
+	}
+	if len(params.Env) > 0 {
+		cmd.Env = append(os.Environ(), params.Env...)
+	}
 
 	err := cmd.Run()
 	result := ExecResult{
