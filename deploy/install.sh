@@ -355,6 +355,64 @@ print_summary() {
     echo "============================================="
 }
 
+setup_bootstrap_firewall() {
+    # Write a minimal /etc/nftables.conf and enable nftables.service so
+    # the kernel loads a restrictive ruleset before sshd starts on every
+    # boot. The home-router agent's Apply() replaces this with the full
+    # rendered template once the user has assigned interface roles via
+    # the web UI; until then this is the pre-agent safety net.
+    #
+    # Assumes default LAN subnet 10.10.10.0/24 (router.yaml default).
+    cat > /etc/nftables.conf <<'NFT'
+#!/usr/sbin/nft -f
+# Home Router bootstrap ruleset — pre-agent boot safety net.
+# Replaced at runtime by the rendered template once the agent applies.
+
+flush ruleset
+
+table inet bootstrap {
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        ct state established,related accept
+        ct state invalid drop
+        iifname "lo" accept
+
+        # Allow the canonical LAN subnet (default 10.10.10.0/24).
+        ip saddr 10.10.10.0/24 accept
+
+        # Minimal ICMP for diagnostics.
+        ip protocol icmp icmp type { echo-request, echo-reply, destination-unreachable, time-exceeded } accept
+        ip6 nexthdr icmpv6 icmpv6 type {
+            destination-unreachable,
+            packet-too-big,
+            time-exceeded,
+            parameter-problem,
+            echo-request,
+            echo-reply,
+            nd-router-solicit,
+            nd-router-advert,
+            nd-neighbor-solicit,
+            nd-neighbor-advert
+        } accept
+
+        log prefix "BOOTSTRAP_DROP: " drop
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy accept;
+    }
+
+    chain output {
+        type filter hook output priority 0; policy accept;
+    }
+}
+NFT
+    chmod 644 /etc/nftables.conf
+    systemctl enable nftables.service 2>/dev/null || true
+    log_info "Bootstrap firewall installed (LAN-only SSH/web until agent applies live ruleset)"
+}
+
 setup_dhcp_dns_script() {
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -484,6 +542,7 @@ main() {
     install_systemd_units
     setup_sysctl
     setup_udev_rules
+    setup_bootstrap_firewall
     setup_dhcp_dns_script
     setup_sysconf_templates
     setup_default_config

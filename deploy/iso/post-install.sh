@@ -194,10 +194,70 @@ touch "$DATA_DIR/.first-boot"
 systemctl disable dnsmasq 2>/dev/null || true
 systemctl stop dnsmasq 2>/dev/null || true
 
+# Bootstrap firewall — write a static /etc/nftables.conf and enable
+# nftables.service. Loaded by the kernel before sshd starts (Debian's
+# nftables.service orders Before=network-pre.target), so port 22 is
+# never reachable from a non-LAN source even during the boot transient
+# before the home-router agent applies the live (template-rendered)
+# ruleset. The agent's Apply() overwrites this with the full ruleset
+# once the user assigns interface roles via the web UI; until then this
+# bootstrap is the safety net.
+#
+# Assumes the canonical default LAN subnet 10.10.10.0/24 (router.yaml
+# default + first-boot bridge in internal/web/firstboot.go). Custom LAN
+# subnets must reach the live ruleset stage before the bootstrap matters.
+cat > /etc/nftables.conf <<'NFT'
+#!/usr/sbin/nft -f
+# Home Router bootstrap ruleset — pre-agent boot safety net.
+# Replaced at runtime by the rendered template once the agent applies.
+
+flush ruleset
+
+table inet bootstrap {
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        ct state established,related accept
+        ct state invalid drop
+        iifname "lo" accept
+
+        # Allow the canonical LAN subnet (default 10.10.10.0/24).
+        ip saddr 10.10.10.0/24 accept
+
+        # Minimal ICMP for diagnostics.
+        ip protocol icmp icmp type { echo-request, echo-reply, destination-unreachable, time-exceeded } accept
+        ip6 nexthdr icmpv6 icmpv6 type {
+            destination-unreachable,
+            packet-too-big,
+            time-exceeded,
+            parameter-problem,
+            echo-request,
+            echo-reply,
+            nd-router-solicit,
+            nd-router-advert,
+            nd-neighbor-solicit,
+            nd-neighbor-advert
+        } accept
+
+        log prefix "BOOTSTRAP_DROP: " drop
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy accept;
+    }
+
+    chain output {
+        type filter hook output priority 0; policy accept;
+    }
+}
+NFT
+chmod 644 /etc/nftables.conf
+systemctl enable nftables.service 2>/dev/null || true
+
 # SSH hardening — ensure PermitRootLogin yes / PasswordAuthentication yes
-# regardless of whether the line is currently commented or not. nftables
-# will restrict SSH to the LAN interface once the home-router agent applies
-# the firewall on first boot.
+# regardless of whether the line is currently commented or not. The
+# bootstrap nftables ruleset above already restricts SSH to the LAN
+# subnet, and the agent's live ruleset takes over from there.
 sed -i -E 's|^[[:space:]]*#?[[:space:]]*PermitRootLogin[[:space:]].*|PermitRootLogin yes|' /etc/ssh/sshd_config
 sed -i -E 's|^[[:space:]]*#?[[:space:]]*PasswordAuthentication[[:space:]].*|PasswordAuthentication yes|' /etc/ssh/sshd_config
 grep -q '^PermitRootLogin ' /etc/ssh/sshd_config || echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
