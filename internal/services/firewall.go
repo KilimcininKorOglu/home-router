@@ -135,8 +135,15 @@ func (s *FirewallService) GetRules(ctx context.Context) (string, error) {
 	return netutil.RunSimple(ctx, "nft", "list", "ruleset")
 }
 
+func (s *FirewallService) persist() {
+	if err := s.cfg.SaveToFile(); err != nil {
+		log.Printf("persist firewall config: %v", err)
+	}
+}
+
 func (s *FirewallService) AddOpenPort(op config.OpenPort) {
 	s.cfg.Firewall.OpenPorts = append(s.cfg.Firewall.OpenPorts, op)
+	s.persist()
 }
 
 func (s *FirewallService) RemoveOpenPort(index int) error {
@@ -147,6 +154,7 @@ func (s *FirewallService) RemoveOpenPort(index int) error {
 		s.cfg.Firewall.OpenPorts[:index],
 		s.cfg.Firewall.OpenPorts[index+1:]...,
 	)
+	s.persist()
 	return nil
 }
 
@@ -155,6 +163,7 @@ func (s *FirewallService) ToggleOpenPort(index int, enabled bool) error {
 		return fmt.Errorf("invalid open port index: %d", index)
 	}
 	s.cfg.Firewall.OpenPorts[index].Enabled = enabled
+	s.persist()
 	return nil
 }
 
@@ -164,6 +173,7 @@ func (s *FirewallService) GetOpenPorts() []config.OpenPort {
 
 func (s *FirewallService) AddPortForward(pf config.PortForward) {
 	s.cfg.Firewall.PortForwards = append(s.cfg.Firewall.PortForwards, pf)
+	s.persist()
 }
 
 func (s *FirewallService) RemovePortForward(index int) error {
@@ -174,6 +184,7 @@ func (s *FirewallService) RemovePortForward(index int) error {
 		s.cfg.Firewall.PortForwards[:index],
 		s.cfg.Firewall.PortForwards[index+1:]...,
 	)
+	s.persist()
 	return nil
 }
 
@@ -188,6 +199,7 @@ func (s *FirewallService) AddRule(rule config.FirewallRule) {
 		rule.Priority = maxPrio + 10
 	}
 	s.cfg.Firewall.Rules = append(s.cfg.Firewall.Rules, rule)
+	s.persist()
 }
 
 func (s *FirewallService) RemoveRule(index int) error {
@@ -198,6 +210,7 @@ func (s *FirewallService) RemoveRule(index int) error {
 		s.cfg.Firewall.Rules[:index],
 		s.cfg.Firewall.Rules[index+1:]...,
 	)
+	s.persist()
 	return nil
 }
 
@@ -206,6 +219,7 @@ func (s *FirewallService) ToggleRule(index int, enabled bool) error {
 		return fmt.Errorf("invalid rule index: %d", index)
 	}
 	s.cfg.Firewall.Rules[index].Enabled = enabled
+	s.persist()
 	return nil
 }
 

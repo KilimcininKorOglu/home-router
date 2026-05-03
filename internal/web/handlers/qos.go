@@ -58,6 +58,7 @@ func (h *QoSHandler) HandleApply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.cfg.QoS.Enabled = r.FormValue("enabled") == "true" || r.FormValue("enabled") == "on"
+	h.cfg.SaveToFile()
 
 	if err := h.qos.Apply(r.Context()); err != nil {
 		log.Printf("apply qos: %v", err)
@@ -81,6 +82,7 @@ func (h *QoSHandler) HandleClear(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.cfg.QoS.Enabled = false
+	h.cfg.SaveToFile()
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Refresh", "true")
