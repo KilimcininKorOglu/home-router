@@ -45,15 +45,33 @@ func (h *QoSHandler) HandleApply(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
 	if profile := r.FormValue("profile"); profile != "" {
+		if profile != "default" && profile != "gaming" && profile != "streaming" && profile != "voip" {
+			http.Error(w, "invalid QoS profile", http.StatusBadRequest)
+			return
+		}
 		h.cfg.QoS.Profile = profile
 	}
 	if upload := r.FormValue("uploadKbps"); upload != "" {
-		h.cfg.QoS.UploadKbps, _ = strconv.Atoi(upload)
+		val, err := strconv.Atoi(upload)
+		if err != nil || val < 0 || val > 10000000 {
+			http.Error(w, "invalid upload bandwidth", http.StatusBadRequest)
+			return
+		}
+		h.cfg.QoS.UploadKbps = val
 	}
 	if download := r.FormValue("downloadKbps"); download != "" {
-		h.cfg.QoS.DownloadKbps, _ = strconv.Atoi(download)
+		val, err := strconv.Atoi(download)
+		if err != nil || val < 0 || val > 10000000 {
+			http.Error(w, "invalid download bandwidth", http.StatusBadRequest)
+			return
+		}
+		h.cfg.QoS.DownloadKbps = val
 	}
 	if cc := r.FormValue("congestionControl"); cc != "" {
+		if cc != "bbr" && cc != "cubic" && cc != "cake" {
+			http.Error(w, "invalid congestion control", http.StatusBadRequest)
+			return
+		}
 		h.cfg.QoS.CongestionControl = cc
 	}
 
