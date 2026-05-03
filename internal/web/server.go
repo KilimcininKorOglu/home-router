@@ -76,6 +76,7 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 	dnsHandler := handlers.NewDNSHandler(renderer, dnsSvc)
 
 	dhcpSvc := services.NewDHCPService(cfg)
+	dhcpSvc.SetDNSService(dnsSvc)
 	dhcpHandler := handlers.NewDHCPHandler(renderer, dhcpSvc)
 
 	qosSvc := services.NewQoSService(cfg)

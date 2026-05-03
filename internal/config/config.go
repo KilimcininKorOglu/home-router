@@ -238,6 +238,10 @@ type StaticDNSRecord struct {
 	// so split-DNS works: queries under this name fall through to upstream
 	// when no local-data matches.
 	LocalZone bool `yaml:"localZone,omitempty"`
+	// Source tags the origin of the record. "" = user-added (UI),
+	// "dhcp-static" = mirrored from a DHCP static lease. Used to scope
+	// automated cleanup so user records are never deleted by mistake.
+	Source string `yaml:"source,omitempty"`
 }
 
 type QueryLogConfig struct {

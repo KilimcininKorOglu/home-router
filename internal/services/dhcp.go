@@ -18,10 +18,33 @@ import (
 
 type DHCPService struct {
 	cfg *config.Config
+	dns *DNSService // optional; set via SetDNSService for static-lease DNS mirror
 }
 
 func NewDHCPService(cfg *config.Config) *DHCPService {
 	return &DHCPService{cfg: cfg}
+}
+
+// SetDNSService wires a DNSService into the DHCP service so static-lease
+// mutations automatically mirror to / clean up the corresponding
+// StaticDNSRecord with Source="dhcp-static". Optional — DHCP works
+// without it (no DNS mirror).
+func (s *DHCPService) SetDNSService(dns *DNSService) {
+	s.dns = dns
+}
+
+// dnsMirrorSource is the StaticDNSRecord.Source tag for records that
+// were auto-created from a DHCP static lease.
+const dnsMirrorSource = "dhcp-static"
+
+// staticLeaseFQDN builds the FQDN for a hostname using the configured
+// system domain (default "lan").
+func (s *DHCPService) staticLeaseFQDN(hostname string) string {
+	domain := s.cfg.System.Domain
+	if domain == "" {
+		domain = "lan"
+	}
+	return hostname + "." + domain
 }
 
 type dnsmasqTemplateData struct {
@@ -262,18 +285,93 @@ func (s *DHCPService) AddStaticLease(mac, ip, hostname string) error {
 		IP:       ip,
 		Hostname: hostname,
 	})
-	return s.persist()
+	if err := s.persist(); err != nil {
+		return err
+	}
+	// Mirror to a persistent StaticDNSRecord so the host is resolvable
+	// across unbound reloads (the runtime dhcp-script injection is
+	// ephemeral).
+	if s.dns != nil && hostname != "" {
+		fqdn := s.staticLeaseFQDN(hostname)
+		err := s.dns.AddStaticRecord(config.StaticDNSRecord{
+			Name:   fqdn,
+			IP:     ip,
+			Source: dnsMirrorSource,
+		})
+		if err != nil {
+			log.Printf("dhcp: dns mirror add %s: %v", fqdn, err)
+		}
+	}
+	return nil
 }
 
 func (s *DHCPService) RemoveStaticLease(index int) error {
 	if index < 0 || index >= len(s.cfg.DHCP.StaticLeases) {
 		return fmt.Errorf("invalid static lease index: %d", index)
 	}
+	removed := s.cfg.DHCP.StaticLeases[index]
 	s.cfg.DHCP.StaticLeases = append(
 		s.cfg.DHCP.StaticLeases[:index],
 		s.cfg.DHCP.StaticLeases[index+1:]...,
 	)
-	return s.persist()
+	if err := s.persist(); err != nil {
+		return err
+	}
+	// Drop the corresponding DHCP-mirrored DNS record (if any). User-added
+	// records with the same name (Source="") are protected by the
+	// Source filter on FindStaticRecordIndexBySource.
+	if s.dns != nil && removed.Hostname != "" {
+		fqdn := s.staticLeaseFQDN(removed.Hostname)
+		if idx := s.dns.FindStaticRecordIndexBySource(dnsMirrorSource, fqdn); idx >= 0 {
+			if err := s.dns.RemoveStaticRecord(idx); err != nil {
+				log.Printf("dhcp: dns mirror remove %s: %v", fqdn, err)
+			}
+		}
+	}
+	return nil
+}
+
+// SyncStaticDNSRecords rebuilds all Source="dhcp-static" StaticDNSRecord
+// entries from the current static lease list. Idempotent. Triggered when
+// the system domain changes (FQDNs need to be rewritten under the new
+// suffix) or any time wholesale re-mirror is desired.
+func (s *DHCPService) SyncStaticDNSRecords(ctx context.Context) error {
+	if s.dns == nil {
+		return nil
+	}
+	// Strip every existing dhcp-static record (cleanup).
+	for {
+		all := s.dns.GetStaticRecords()
+		idx := -1
+		for i, r := range all {
+			if r.Source == dnsMirrorSource {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			break
+		}
+		if err := s.dns.RemoveStaticRecord(idx); err != nil {
+			return fmt.Errorf("strip dns mirror: %w", err)
+		}
+	}
+	// Re-add from the current static lease list.
+	for _, lease := range s.cfg.DHCP.StaticLeases {
+		if lease.Hostname == "" {
+			continue
+		}
+		fqdn := s.staticLeaseFQDN(lease.Hostname)
+		err := s.dns.AddStaticRecord(config.StaticDNSRecord{
+			Name:   fqdn,
+			IP:     lease.IP,
+			Source: dnsMirrorSource,
+		})
+		if err != nil {
+			log.Printf("dhcp: dns sync add %s: %v", fqdn, err)
+		}
+	}
+	return s.dns.ApplyConfig(ctx)
 }
 
 func (s *DHCPService) GetDeviceList() []DeviceInfo {
@@ -291,38 +389,44 @@ func (s *DHCPService) GetDeviceList() []DeviceInfo {
 	return devices
 }
 
+// RebuildDNSRecords re-syncs DHCP-mirrored static records and re-injects
+// runtime entries for currently active dynamic leases. Static leases now
+// flow through the persistent StaticDNSRecord pipeline (template-rendered
+// + reload-safe); active leases stay ephemeral via unbound-control as
+// before. The `domain` argument is accepted for backward compatibility
+// with system handler call sites; the actual domain comes from
+// s.cfg.System.Domain via staticLeaseFQDN.
 func (s *DHCPService) RebuildDNSRecords(ctx context.Context, domain string) error {
-	netutil.Run(ctx, "unbound-control", "flush_zone", domain)
+	if err := s.SyncStaticDNSRecords(ctx); err != nil {
+		log.Printf("dhcp: SyncStaticDNSRecords: %v", err)
+	}
 
+	// Active leases: ephemeral runtime injection (no persistence).
 	leases, _ := s.GetLeases()
-	staticLeases := s.cfg.DHCP.StaticLeases
-
-	var allEntries []struct{ hostname, ip string }
-
+	resolveDomain := domain
+	if resolveDomain == "" {
+		resolveDomain = s.cfg.System.Domain
+	}
+	if resolveDomain == "" {
+		resolveDomain = "lan"
+	}
+	netutil.Run(ctx, "unbound-control", "flush_zone", resolveDomain)
+	count := 0
 	for _, l := range leases {
-		if l.Hostname != "" && l.Active {
-			allEntries = append(allEntries, struct{ hostname, ip string }{l.Hostname, l.IP})
+		if l.Hostname == "" || !l.Active {
+			continue
 		}
-	}
-	for _, sl := range staticLeases {
-		if sl.Hostname != "" {
-			allEntries = append(allEntries, struct{ hostname, ip string }{sl.Hostname, sl.IP})
-		}
-	}
-
-	for _, e := range allEntries {
-		fqdn := e.hostname + "." + domain
-		netutil.Run(ctx, "unbound-control", "local_data", fqdn+". 300 IN A "+e.ip)
-		netutil.Run(ctx, "unbound-control", "local_data", e.hostname+". 300 IN A "+e.ip)
-
-		parts := strings.Split(e.ip, ".")
+		fqdn := l.Hostname + "." + resolveDomain
+		netutil.Run(ctx, "unbound-control", "local_data", fqdn+". 300 IN A "+l.IP)
+		netutil.Run(ctx, "unbound-control", "local_data", l.Hostname+". 300 IN A "+l.IP)
+		parts := strings.Split(l.IP, ".")
 		if len(parts) == 4 {
 			ptr := parts[3] + "." + parts[2] + "." + parts[1] + "." + parts[0] + ".in-addr.arpa."
 			netutil.Run(ctx, "unbound-control", "local_data", ptr+" 300 IN PTR "+fqdn+".")
 		}
+		count++
 	}
-
-	log.Printf("DNS records rebuilt for domain %s: %d entries", domain, len(allEntries))
+	log.Printf("DNS active-lease entries refreshed for %s: %d", resolveDomain, count)
 	return nil
 }
 

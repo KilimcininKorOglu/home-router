@@ -55,6 +55,9 @@ server:
 
 {{- range .StaticRecords }}
     local-data: "{{ .Name }}. IN A {{ .IP }}"
+{{- if .PTR }}
+    local-data: "{{ .PTR }} IN PTR {{ .Name }}."
+{{- end }}
 {{- if .LocalZone }}
     local-zone: "{{ .Name }}." typetransparent
 {{- end }}

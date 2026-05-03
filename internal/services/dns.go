@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -75,7 +76,16 @@ type unboundTemplateData struct {
 	QueryLogPath    string
 	EnableDoT       bool
 	DoTUpstream     string
-	StaticRecords   []config.StaticDNSRecord
+	StaticRecords   []renderStaticRecord
+}
+
+// renderStaticRecord is the template-facing view of a static DNS record:
+// the persisted fields plus a pre-computed PTR string (empty for IPv6).
+type renderStaticRecord struct {
+	Name      string
+	IP        string
+	LocalZone bool
+	PTR       string
 }
 
 // RenderConfig returns the rendered unbound.conf as a string. Pure
@@ -98,7 +108,7 @@ func (s *DNSService) RenderConfig() (string, error) {
 		EnableDoT:       s.cfg.DNS.EnableDoT,
 		DoTUpstream:     s.cfg.DNS.DoTUpstream,
 		ULAPrefix:       s.cfg.IPv6.LAN.ULA.Prefix,
-		StaticRecords:   s.cfg.DNS.StaticRecords,
+		StaticRecords:   buildRenderStaticRecords(s.cfg.DNS.StaticRecords),
 	}
 
 	if data.QueryLogPath == "" {
@@ -310,6 +320,50 @@ func (s *DNSService) GetStaticRecords() []config.StaticDNSRecord {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cfg.DNS.StaticRecords
+}
+
+// FindStaticRecordIndexBySource returns the slice index of the first
+// record whose Source and Name match (case-insensitive on Name), or -1
+// if no match. Used by automated callers (DHCP mirror) to remove
+// records they own without disturbing user-added ones.
+func (s *DNSService) FindStaticRecordIndexBySource(source, name string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for i, r := range s.cfg.DNS.StaticRecords {
+		if r.Source == source && strings.EqualFold(r.Name, name) {
+			return i
+		}
+	}
+	return -1
+}
+
+// buildRenderStaticRecords expands persisted records with a pre-computed
+// IPv4 PTR (empty when the IP is IPv6 or invalid).
+func buildRenderStaticRecords(records []config.StaticDNSRecord) []renderStaticRecord {
+	out := make([]renderStaticRecord, 0, len(records))
+	for _, r := range records {
+		out = append(out, renderStaticRecord{
+			Name:      r.Name,
+			IP:        r.IP,
+			LocalZone: r.LocalZone,
+			PTR:       ipv4PTR(r.IP),
+		})
+	}
+	return out
+}
+
+// ipv4PTR returns "<d>.<c>.<b>.<a>.in-addr.arpa." for an IPv4 dotted-quad
+// or "" for IPv6 / invalid input.
+func ipv4PTR(ip string) string {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return ""
+	}
+	v4 := parsed.To4()
+	if v4 == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d.%d.%d.%d.in-addr.arpa.", v4[3], v4[2], v4[1], v4[0])
 }
 
 // AddStaticRecord adds a forward A record. The Name should be an FQDN
