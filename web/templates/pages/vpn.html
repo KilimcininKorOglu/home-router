@@ -30,7 +30,6 @@
                 {{ end }}
             </div>
             <div style="display:flex; gap:var(--space-sm);">
-                <a href="/vpn/server/peer/{{ .Name }}/config" class="btn btn-secondary btn-sm">{{ t $.Lang "vpn.downloadConfig" }}</a>
                 <button class="btn btn-danger btn-sm" hx-delete="/vpn/server/peer/{{ .Name }}" hx-swap="none">{{ t $.Lang "common.delete" }}</button>
             </div>
         </div>

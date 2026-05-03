@@ -62,3 +62,17 @@ func (h *DNSHandler) HandleClearLog(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, "/dns", http.StatusSeeOther)
 }
+
+func (h *DNSHandler) HandleUpdateBlocklist(w http.ResponseWriter, r *http.Request) {
+	if err := h.dns.UpdateBlocklist(r.Context()); err != nil {
+		log.Printf("update blocklist: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/dns", http.StatusSeeOther)
+}

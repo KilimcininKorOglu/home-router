@@ -461,3 +461,15 @@ func (s *OpenVPNService) ConnectClient(ctx context.Context, name string) error {
 	}
 	return fmt.Errorf("client %q not found", name)
 }
+
+func (s *OpenVPNService) DisconnectClient(ctx context.Context, name string) error {
+	pidFile := fmt.Sprintf("/var/run/openvpn-%s.pid", name)
+	pidData, err := os.ReadFile(pidFile)
+	if err == nil {
+		pid := strings.TrimSpace(string(pidData))
+		netutil.Run(ctx, "kill", pid)
+		os.Remove(pidFile)
+	}
+	log.Printf("OpenVPN client %q disconnected", name)
+	return nil
+}

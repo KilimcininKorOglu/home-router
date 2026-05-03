@@ -191,3 +191,17 @@ func (h *OpenVPNHandler) HandleConnectOutbound(w http.ResponseWriter, r *http.Re
 	}
 	http.Redirect(w, r, "/openvpn", http.StatusSeeOther)
 }
+
+func (h *OpenVPNHandler) HandleDisconnectOutbound(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if err := h.ovpn.DisconnectClient(r.Context(), name); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/openvpn", http.StatusSeeOther)
+}

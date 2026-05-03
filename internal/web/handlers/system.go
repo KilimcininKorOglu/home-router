@@ -3,8 +3,12 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
@@ -185,4 +189,54 @@ func (h *SystemHandler) HandleFactoryReset(w http.ResponseWriter, r *http.Reques
 	}
 	netutil.Run(r.Context(), "systemctl", "reboot")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *SystemHandler) HandleExport(w http.ResponseWriter, r *http.Request) {
+	outputPath := filepath.Join(os.TempDir(), fmt.Sprintf("home-router-backup-%s.tar.gz", time.Now().Format("20060102-150405")))
+
+	if err := h.backup.Export(r.Context(), outputPath); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filepath.Base(outputPath)))
+	http.ServeFile(w, r, outputPath)
+	os.Remove(outputPath)
+}
+
+func (h *SystemHandler) HandleImport(w http.ResponseWriter, r *http.Request) {
+	file, _, err := r.FormFile("backup")
+	if err != nil {
+		http.Error(w, "backup file required", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	tmpFile, err := os.CreateTemp("", "home-router-import-*.tar.gz")
+	if err != nil {
+		http.Error(w, "failed to create temp file", http.StatusInternalServerError)
+		return
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := io.Copy(tmpFile, file); err != nil {
+		tmpFile.Close()
+		http.Error(w, "failed to save uploaded file", http.StatusInternalServerError)
+		return
+	}
+	tmpFile.Close()
+
+	if err := h.backup.Import(r.Context(), tmpFile.Name()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Println("config imported via web UI")
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }

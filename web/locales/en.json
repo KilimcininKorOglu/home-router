@@ -70,6 +70,9 @@
     "firewall.exampleName": "e.g. SSH",
     "firewall.exampleIntIP": "e.g. 10.10.10.x",
     "firewall.exampleIface": "e.g. ppp0",
+    "firewall.extPort": "External Port",
+    "firewall.intIP": "Internal IP",
+    "firewall.intPort": "Internal Port",
 
     "vpn.title": "VPN Management",
     "vpn.addTunnel": "Add Tunnel",

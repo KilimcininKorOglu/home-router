@@ -126,15 +126,15 @@
                     </select>
                 </div>
                 <div class="input-group">
-                    <label class="input-label">Ext Port</label>
+                    <label class="input-label">{{ t $.Lang "firewall.extPort" }}</label>
                     <input class="input" name="extPort" type="number" min="1" max="65535" required>
                 </div>
                 <div class="input-group">
-                    <label class="input-label">Int IP</label>
+                    <label class="input-label">{{ t $.Lang "firewall.intIP" }}</label>
                     <input class="input" name="intIP" placeholder="{{ t $.Lang "firewall.exampleIntIP" }}" required>
                 </div>
                 <div class="input-group">
-                    <label class="input-label">Int Port</label>
+                    <label class="input-label">{{ t $.Lang "firewall.intPort" }}</label>
                     <input class="input" name="intPort" type="number" min="1" max="65535" required>
                 </div>
             </div>

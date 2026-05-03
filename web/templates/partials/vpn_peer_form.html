@@ -1,6 +1,0 @@
-{{ define "vpn_peer_form" }}
-<form hx-post="/vpn/server/peer" style="display:flex; gap:var(--space-sm); margin-top:var(--space-md);">
-    <input class="input" name="name" placeholder="{{ t .Lang "common.name" }}" required style="flex:1;">
-    <button type="submit" class="btn btn-primary btn-sm">{{ t .Lang "vpn.addPeer" }}</button>
-</form>
-{{ end }}

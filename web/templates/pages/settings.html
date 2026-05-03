@@ -109,9 +109,12 @@
         <div class="card-header">
             <span class="card-title">{{ t $.Lang "settings.backup" }}</span>
         </div>
-        <div style="display:flex; gap:var(--space-sm); padding-top:var(--space-md);">
-            <button class="btn btn-secondary btn-sm">{{ t $.Lang "settings.export" }}</button>
-            <button class="btn btn-secondary btn-sm">{{ t $.Lang "settings.import" }}</button>
+        <div style="display:flex; gap:var(--space-sm); flex-wrap:wrap; padding-top:var(--space-md);">
+            <a href="/system/backup/export" class="btn btn-secondary btn-sm">{{ t $.Lang "settings.export" }}</a>
+            <form hx-post="/system/backup/import" hx-encoding="multipart/form-data" hx-swap="none" style="display:flex; gap:var(--space-sm); align-items:center;">
+                <input type="file" name="backup" accept=".tar.gz,.tgz" required class="input" style="max-width:220px;">
+                <button type="submit" class="btn btn-secondary btn-sm">{{ t $.Lang "settings.import" }}</button>
+            </form>
         </div>
     </div>
 
