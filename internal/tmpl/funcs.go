@@ -31,10 +31,7 @@ func FuncMap(loc *i18n.I18n) template.FuncMap {
 		"humanTime":   humanTime,
 		"upper":       strings.ToUpper,
 		"lower":       strings.ToLower,
-		"join":        strings.Join,
-		"safeHTML": func(s string) template.HTML {
-			return template.HTML(s)
-		},
+		"join": strings.Join,
 	}
 }
 
