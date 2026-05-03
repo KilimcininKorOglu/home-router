@@ -154,60 +154,60 @@ setup_default_config() {
 
 ask_hostname() {
     echo ""
-    echo "=== Ana Bilgisayar Adi / Hostname ==="
+    echo "=== Ana Bilgisayar Adı / Hostname ==="
     local hostname
-    read -rp "Ana bilgisayar adi girin / Enter hostname [hermes]: " hostname
+    read -rp "Ana bilgisayar adı girin / Enter hostname [hermes]: " hostname
     hostname="${hostname:-hermes}"
 
     sed -i "s/hostname: \".*\"/hostname: \"$hostname\"/" "$CONFIG_DIR/router.yaml"
     hostnamectl set-hostname "$hostname" 2>/dev/null || true
-    log_info "Ana bilgisayar adi ayarlandi / Hostname set to: $hostname"
+    log_info "Ana bilgisayar adı ayarlandı / Hostname set to: $hostname"
 }
 
 ask_root_password() {
     echo ""
-    echo "=== Root Sifresi / Root Password ==="
+    echo "=== Root Şifresi / Root Password ==="
     local password password_confirm
     while true; do
-        read -rsp "Root (SSH/konsol) sifresi girin (en az 8 karakter) / Enter root password (min 8 chars): " password
+        read -rsp "Root (SSH/konsol) şifresi girin (en az 8 karakter) / Enter root password (min 8 chars): " password
         echo ""
         if [[ ${#password} -lt 8 ]]; then
-            log_error "Sifre en az 8 karakter olmali / Password must be at least 8 characters"
+            log_error "Şifre en az 8 karakter olmalı / Password must be at least 8 characters"
             continue
         fi
-        read -rsp "Root sifresini tekrar girin / Confirm root password: " password_confirm
+        read -rsp "Root şifresini tekrar girin / Confirm root password: " password_confirm
         echo ""
         if [[ "$password" != "$password_confirm" ]]; then
-            log_error "Sifreler eslesmiyor / Passwords do not match"
+            log_error "Şifreler eşleşmiyor / Passwords do not match"
             continue
         fi
         break
     done
 
     echo "root:$password" | chpasswd
-    log_info "Root sifresi guncellendi / Root password updated"
+    log_info "Root şifresi güncellendi / Root password updated"
 }
 
 ask_admin_password() {
     if [[ -f "$CONFIG_DIR/router.yaml" ]] && grep -q 'adminPasswordHash: "\$' "$CONFIG_DIR/router.yaml" 2>/dev/null; then
-        log_info "Yonetici sifresi zaten ayarli / Admin password already set"
+        log_info "Yönetici şifresi zaten ayarlı / Admin password already set"
         return
     fi
 
     echo ""
-    echo "=== Web Arayuzu Yonetici Sifresi / Web UI Admin Password ==="
+    echo "=== Web Arayüzü Yönetici Şifresi / Web UI Admin Password ==="
     local password password_confirm
     while true; do
-        read -rsp "Web arayuzu yonetici sifresi girin (en az 8 karakter) / Enter web UI admin password (min 8 chars): " password
+        read -rsp "Web arayüzü yönetici şifresi girin (en az 8 karakter) / Enter web UI admin password (min 8 chars): " password
         echo ""
         if [[ ${#password} -lt 8 ]]; then
-            log_error "Sifre en az 8 karakter olmali / Password must be at least 8 characters"
+            log_error "Şifre en az 8 karakter olmalı / Password must be at least 8 characters"
             continue
         fi
-        read -rsp "Yonetici sifresini tekrar girin / Confirm admin password: " password_confirm
+        read -rsp "Yönetici şifresini tekrar girin / Confirm admin password: " password_confirm
         echo ""
         if [[ "$password" != "$password_confirm" ]]; then
-            log_error "Sifreler eslesmiyor / Passwords do not match"
+            log_error "Şifreler eşleşmiyor / Passwords do not match"
             continue
         fi
         break
@@ -220,9 +220,9 @@ ask_admin_password() {
 
     if [[ -n "$hash" ]]; then
         sed -i "s|adminPasswordHash: \".*\"|adminPasswordHash: \"$hash\"|" "$CONFIG_DIR/router.yaml"
-        log_info "Yonetici sifresi yapilandirmaya yazildi / Admin password hash written to config"
+        log_info "Yönetici şifresi yapılandırmaya yazıldı / Admin password hash written to config"
     else
-        log_warn "Sifre olusturulamadi, ilk baslatmada ayarlanacak / Could not hash password, will be set on first start"
+        log_warn "Şifre oluşturulamadı, ilk başlatmada ayarlanacak / Could not hash password, will be set on first start"
     fi
 }
 
@@ -237,7 +237,7 @@ ask_timezone() {
     echo "  6) Asia/Tokyo"
     echo "  7) UTC"
     local choice
-    read -rp "Saat dilimi secin / Select timezone [1]: " choice
+    read -rp "Saat dilimi seçin / Select timezone [1]: " choice
     choice="${choice:-1}"
 
     local tz
@@ -254,19 +254,19 @@ ask_timezone() {
 
     sed -i "s/timezone: \".*\"/timezone: \"$tz\"/" "$CONFIG_DIR/router.yaml"
     timedatectl set-timezone "$tz" 2>/dev/null || true
-    log_info "Saat dilimi ayarlandi / Timezone set to: $tz"
+    log_info "Saat dilimi ayarlandı / Timezone set to: $tz"
 }
 
 ask_keyboard() {
     echo ""
-    echo "=== Klavye Duzeni / Keyboard Layout ==="
+    echo "=== Klavye Düzeni / Keyboard Layout ==="
     echo "  1) tr — Turkish Q (default)"
     echo "  2) us — US English"
     echo "  3) de — German"
     echo "  4) fr — French"
     echo "  5) uk — UK English"
     local choice
-    read -rp "Klavye duzeni secin / Select keyboard layout [1]: " choice
+    read -rp "Klavye düzeni seçin / Select keyboard layout [1]: " choice
     choice="${choice:-1}"
 
     local kb
@@ -281,7 +281,7 @@ ask_keyboard() {
 
     localectl set-keymap "$kb" 2>/dev/null || \
     loadkeys "$kb" 2>/dev/null || true
-    log_info "Klavye duzeni ayarlandi / Keyboard layout set to: $kb"
+    log_info "Klavye düzeni ayarlandı / Keyboard layout set to: $kb"
 }
 
 print_summary() {
@@ -290,7 +290,7 @@ print_summary() {
 
     echo ""
     echo "============================================="
-    echo "  Home Router Kurulumu Tamamlandi"
+    echo "  Home Router Kurulumu Tamamlandı"
     echo "  Home Router Installation Complete"
     echo "============================================="
     echo ""
@@ -303,7 +303,7 @@ print_summary() {
     echo "  Status:   systemctl status home-router.target"
     echo "  Logs:     journalctl -u home-router-web -f"
     echo ""
-    echo "  Web arayuzu / Web UI: https://<LAN_IP>:8443"
+    echo "  Web arayüzü / Web UI: https://<LAN_IP>:8443"
     echo ""
     echo "============================================="
 }

@@ -8,7 +8,7 @@ DATA_DIR="/var/lib/home-router"
 LOG_DIR="/var/log/home-router"
 SYSTEMD_DIR="/etc/systemd/system"
 
-echo "=== Home Router Kurulum Sonrasi / Post-Install ==="
+echo "=== Home Router Kurulum Sonrası / Post-Install ==="
 
 # Install packages from local ISO repo
 if [[ -d /cdrom/pool/extra ]] && [[ -f /cdrom/pool/extra/Packages ]]; then
@@ -19,7 +19,7 @@ if [[ -d /cdrom/pool/extra ]] && [[ -f /cdrom/pool/extra/Packages ]]; then
         samba samba-common-bin smartmontools mdadm iproute2 \
         unbound dnsmasq rsyslog chrony qrencode \
         wide-dhcpv6-client curl jq hdparm \
-        2>/dev/null || echo "UYARI/WARN: Bazi paketler kurulamadi / Some packages may not have installed"
+        2>/dev/null || echo "UYARI / WARN: Bazı paketler kurulamadı / Some packages may not have installed"
     rm -f /etc/apt/sources.list.d/home-router-local.list
 fi
 
@@ -141,7 +141,7 @@ if [[ -f /tmp/admin-password.txt ]]; then
         echo "")
     if [[ -n "$ADMIN_HASH" && -f "$CONFIG_DIR/router.yaml" ]]; then
         sed -i "s|adminPasswordHash:.*|adminPasswordHash: \"$ADMIN_HASH\"|" "$CONFIG_DIR/router.yaml"
-        echo "Yonetici sifresi ayarlandi. / Admin password set."
+        echo "Yönetici şifresi ayarlandı. / Admin password set."
     fi
     rm -f /tmp/admin-password.txt
 fi
@@ -163,6 +163,6 @@ systemctl stop dnsmasq 2>/dev/null || true
 sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
 sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
-echo "=== Kurulum tamamlandi / Post-install complete ==="
-echo "Sistem Home Router olarak yeniden baslatilacak. / System will reboot into Home Router."
-echo "Web arayuzu: https://<LAN_IP>:8443 / Web UI: https://<LAN_IP>:8443"
+echo "=== Kurulum tamamlandı / Post-install complete ==="
+echo "Sistem Home Router olarak yeniden başlatılacak. / System will reboot into Home Router."
+echo "Web arayüzü: https://<LAN_IP>:8443 / Web UI: https://<LAN_IP>:8443"
