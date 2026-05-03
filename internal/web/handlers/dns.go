@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"fmt"
+	"html"
 	"log"
 	"net/http"
 	"regexp"
@@ -84,6 +86,25 @@ func (h *DNSHandler) HandleUpdateBlocklist(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	http.Redirect(w, r, "/dns", http.StatusSeeOther)
+}
+
+// HandleProbeDoT runs a one-shot connectivity check against the supplied
+// DoT upstream and returns an inline HTMX-friendly status snippet (small
+// HTML span) so the result lands in the Test button's hx-target.
+func (h *DNSHandler) HandleProbeDoT(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	upstream := strings.TrimSpace(r.FormValue("dot_upstream"))
+	if upstream == "" {
+		http.Error(w, "upstream required", http.StatusBadRequest)
+		return
+	}
+	latency, err := h.dns.ProbeDoT(r.Context(), upstream)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err != nil {
+		fmt.Fprintf(w, `<span class="badge badge-error">FAIL: %s</span>`, html.EscapeString(err.Error()))
+		return
+	}
+	fmt.Fprintf(w, `<span class="badge badge-success">OK (%dms)</span>`, latency.Milliseconds())
 }
 
 func (h *DNSHandler) HandleSaveDoT(w http.ResponseWriter, r *http.Request) {

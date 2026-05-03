@@ -281,6 +281,7 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 	mux.Handle("POST /dns/clear-log", authed(http.HandlerFunc(s.dns.HandleClearLog)))
 	mux.Handle("POST /dns/blocklist/update", authed(http.HandlerFunc(s.dns.HandleUpdateBlocklist)))
 	mux.Handle("POST /dns/dot", authed(http.HandlerFunc(s.dns.HandleSaveDoT)))
+	mux.Handle("POST /dns/dot/probe", authed(http.HandlerFunc(s.dns.HandleProbeDoT)))
 	mux.Handle("POST /dns/records", authed(http.HandlerFunc(s.dns.HandleAddRecord)))
 	mux.Handle("DELETE /dns/records/{index}", authed(http.HandlerFunc(s.dns.HandleDeleteRecord)))
 	mux.Handle("GET /dhcp", authed(http.HandlerFunc(s.dhcp.HandlePage)))

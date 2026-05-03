@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -14,6 +15,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"golang.org/x/net/dns/dnsmessage"
 
 	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/netutil"
@@ -327,6 +330,98 @@ func (s *DNSService) GetDNSConfig() config.DNSConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cfg.DNS
+}
+
+// ProbeDoT performs a one-shot TLS handshake + DNS query against the
+// given upstream and returns the round-trip latency on success.
+// Accepted upstream formats:
+//   - "ip"                          (port 853, no SNI)
+//   - "ip@port"                     (custom port, no SNI)
+//   - "ip@port#hostname"            (custom port + SNI for cert validation)
+//   - "ip#hostname"                 (port 853 + SNI)
+// Probes are timeout-bounded (5s).
+func (s *DNSService) ProbeDoT(ctx context.Context, upstream string) (time.Duration, error) {
+	host, port, sni := parseDoTSpec(strings.TrimSpace(upstream))
+	if host == "" {
+		return 0, fmt.Errorf("empty or invalid upstream")
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	dialer := &tls.Dialer{
+		NetDialer: &net.Dialer{Timeout: 3 * time.Second},
+		Config: &tls.Config{
+			ServerName: sni,
+		},
+	}
+	addr := net.JoinHostPort(host, port)
+	start := time.Now()
+	conn, err := dialer.DialContext(probeCtx, "tcp", addr)
+	if err != nil {
+		return 0, fmt.Errorf("dial: %w", err)
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+
+	// Send a tiny "cloudflare.com. A IN" query (any name works; we only
+	// care that the upstream answers at all).
+	var msg dnsmessage.Message
+	msg.Header.ID = 0x1234
+	msg.Header.RecursionDesired = true
+	msg.Questions = []dnsmessage.Question{{
+		Name:  dnsmessage.MustNewName("cloudflare.com."),
+		Type:  dnsmessage.TypeA,
+		Class: dnsmessage.ClassINET,
+	}}
+	wire, err := msg.Pack()
+	if err != nil {
+		return 0, fmt.Errorf("pack: %w", err)
+	}
+	// DoT prefixes each message with a 2-byte length (RFC 7858).
+	frame := make([]byte, 2+len(wire))
+	frame[0] = byte(len(wire) >> 8)
+	frame[1] = byte(len(wire))
+	copy(frame[2:], wire)
+	if _, err := conn.Write(frame); err != nil {
+		return 0, fmt.Errorf("write: %w", err)
+	}
+	hdr := make([]byte, 2)
+	if _, err := conn.Read(hdr); err != nil {
+		return 0, fmt.Errorf("read header: %w", err)
+	}
+	respLen := int(hdr[0])<<8 | int(hdr[1])
+	if respLen <= 0 || respLen > 65535 {
+		return 0, fmt.Errorf("invalid response length")
+	}
+	resp := make([]byte, respLen)
+	if _, err := conn.Read(resp); err != nil {
+		return 0, fmt.Errorf("read body: %w", err)
+	}
+	var parsed dnsmessage.Message
+	if err := parsed.Unpack(resp); err != nil {
+		return 0, fmt.Errorf("unpack: %w", err)
+	}
+	return time.Since(start), nil
+}
+
+// parseDoTSpec splits an unbound-style DoT upstream string into its
+// host, port, and SNI components. Defaults: port=853, sni="" (no
+// validation hostname). Examples:
+//   "1.1.1.1"                          → host=1.1.1.1, port=853, sni=""
+//   "1.1.1.1@853"                      → host=1.1.1.1, port=853, sni=""
+//   "1.1.1.1@853#cloudflare-dns.com"   → host=..., port=853, sni=cloudflare-dns.com
+func parseDoTSpec(spec string) (host, port, sni string) {
+	port = "853"
+	if i := strings.Index(spec, "#"); i >= 0 {
+		sni = spec[i+1:]
+		spec = spec[:i]
+	}
+	if i := strings.Index(spec, "@"); i >= 0 {
+		port = spec[i+1:]
+		spec = spec[:i]
+	}
+	host = spec
+	return
 }
 
 // SaveDNSSettings persists the DoT toggle and upstream string to

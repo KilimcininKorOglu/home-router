@@ -74,10 +74,20 @@
             </label>
             <label>
                 <div class="input-label">{{ t $.Lang "dns.dotUpstream" }}</div>
-                <input class="input" name="dot_upstream" value="{{ .DoTUpstream }}" placeholder="1.1.1.1@853#cloudflare-dns.com">
+                <input class="input" name="dot_upstream" id="dot-upstream-input" value="{{ .DoTUpstream }}" placeholder="1.1.1.1@853#cloudflare-dns.com">
                 <div style="font-size:var(--font-xs); color:var(--text-secondary); margin-top:var(--space-xs);">{{ t $.Lang "dns.dotHint" }}</div>
             </label>
-            <button class="btn btn-primary btn-sm" type="submit">{{ t $.Lang "common.save" }}</button>
+            <div style="display:flex; gap:var(--space-sm); align-items:center;">
+                <button class="btn btn-primary btn-sm" type="submit">{{ t $.Lang "common.save" }}</button>
+                <button class="btn btn-secondary btn-sm" type="button"
+                        hx-post="/dns/dot/probe"
+                        hx-include="#dot-upstream-input"
+                        hx-target="#dot-probe-result"
+                        hx-swap="innerHTML">
+                    {{ t $.Lang "dns.dotProbe" }}
+                </button>
+                <span id="dot-probe-result"></span>
+            </div>
         </form>
     </div>
 
