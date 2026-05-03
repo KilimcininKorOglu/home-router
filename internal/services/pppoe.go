@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -163,11 +164,11 @@ func (s *PPPoEService) renderConfig() error {
 	}
 
 	peerDir := "/etc/ppp/peers"
-	os.MkdirAll(peerDir, 0o755)
+	netutil.MkdirAll(peerDir, 0o755)
 
 	optSrc, err := os.ReadFile("configs/sysconf/pppoe-options.tmpl")
 	if err == nil {
-		os.WriteFile("/etc/ppp/options", optSrc, 0o644)
+		netutil.WriteFile("/etc/ppp/options", optSrc, 0o644)
 	}
 
 	tmpl, err := template.ParseFiles("configs/sysconf/pppoe-peer.tmpl")
@@ -175,14 +176,13 @@ func (s *PPPoEService) renderConfig() error {
 		return fmt.Errorf("parse peer template: %w", err)
 	}
 
-	f, err := os.Create(filepath.Join(peerDir, "wan"))
-	if err != nil {
-		return fmt.Errorf("create peer file: %w", err)
-	}
-	defer f.Close()
-
-	if err := tmpl.Execute(f, data); err != nil {
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
 		return fmt.Errorf("execute peer template: %w", err)
+	}
+
+	if err := netutil.WriteFile(filepath.Join(peerDir, "wan"), buf.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("write peer file: %w", err)
 	}
 
 	if s.cfg.PPPoE.Password != "" {
@@ -248,8 +248,8 @@ func (s *PPPoEService) SniffStart(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("read pppoe-server-options: %w", err)
 	}
-	os.MkdirAll("/etc/ppp", 0o755)
-	if err := os.WriteFile("/etc/pppoe-server-options", optSrc, 0o644); err != nil {
+	netutil.MkdirAll("/etc/ppp", 0o755)
+	if err := netutil.WriteFile("/etc/pppoe-server-options", optSrc, 0o644); err != nil {
 		return fmt.Errorf("write pppoe-server-options: %w", err)
 	}
 
@@ -306,15 +306,10 @@ func (s *PPPoEService) SniffStatus() *SniffStatus {
 }
 
 func appendToFile(path, line string) error {
-	existing, _ := os.ReadFile(path)
+	existing, _ := netutil.ReadFile(path)
 	if strings.Contains(string(existing), strings.TrimSpace(line)) {
 		return nil
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.WriteString(line)
-	return err
+	newContent := string(existing) + line
+	return netutil.WriteFile(path, []byte(newContent), 0o600)
 }
