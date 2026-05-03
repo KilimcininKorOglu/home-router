@@ -476,6 +476,31 @@ setup_initial_tls() {
     log_info "TLS certificate generated"
 }
 
+setup_render_configs() {
+    if [[ ! -f "$CONFIG_DIR/router.yaml" ]] || [[ ! -d "$DATA_DIR/sysconf" ]]; then
+        log_warn "render-configs skipped (missing router.yaml or sysconf templates)"
+        return
+    fi
+    log_info "Rendering service configs to /etc/..."
+    if ! "$INSTALL_DIR/$BINARY_NAME" render-configs \
+            --config "$CONFIG_DIR/router.yaml" \
+            --sysconf-dir "$DATA_DIR/sysconf"; then
+        log_error "render-configs failed"
+        exit 1
+    fi
+}
+
+enable_native_services() {
+    # Native Debian services (unbound, dnsmasq, chrony, rsyslog, smbd,
+    # nmbd) start on boot using the home-router-rendered configs in
+    # /etc/. dnsmasq is default-disabled in Debian; force-enable.
+    for svc in unbound dnsmasq chrony rsyslog smbd nmbd; do
+        if systemctl enable "$svc" 2>/dev/null; then
+            log_info "Enabled $svc.service"
+        fi
+    done
+}
+
 check_installation() {
     local errors=0
 
@@ -553,6 +578,8 @@ main() {
     ask_language
     ask_keyboard
     setup_initial_tls
+    setup_render_configs
+    enable_native_services
     print_summary
 }
 

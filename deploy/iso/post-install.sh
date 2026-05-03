@@ -190,9 +190,7 @@ fi
 # First boot flag
 touch "$DATA_DIR/.first-boot"
 
-# Disable dnsmasq default (we manage it)
-systemctl disable dnsmasq 2>/dev/null || true
-systemctl stop dnsmasq 2>/dev/null || true
+# (Native servis enable for-loop'u render-configs sonrasına taşındı)
 
 # Bootstrap firewall — write a static /etc/nftables.conf and enable
 # nftables.service. Loaded by the kernel before sshd starts (Debian's
@@ -278,6 +276,24 @@ if [[ ! -f "$DATA_DIR/tls/server.crt" ]] && [[ -f "$CONFIG_DIR/router.yaml" ]]; 
         exit 1
     fi
 fi
+
+# Tüm servis template'lerini /etc/ altına render et. Native Debian servisleri
+# ilk boot'ta home-router config'leriyle başlasın.
+if [[ -f "$CONFIG_DIR/router.yaml" ]] && [[ -d "$DATA_DIR/sysconf" ]]; then
+    if ! "$INSTALL_DIR/$BINARY_NAME" render-configs \
+            --config "$CONFIG_DIR/router.yaml" \
+            --sysconf-dir "$DATA_DIR/sysconf"; then
+        echo "HATA / ERROR: Servis config'leri render edilemedi / render-configs failed" >&2
+        exit 1
+    fi
+fi
+
+# Native Debian servislerini enable et — config'ler /etc/ altına yazıldı,
+# ilk boot'ta home-router template'leriyle başlasınlar. dnsmasq Debian'da
+# default disabled, açıkça enable ediyoruz. Diğerleri de idempotent.
+for svc in unbound dnsmasq chrony rsyslog smbd nmbd; do
+    systemctl enable "$svc" 2>/dev/null || true
+done
 
 echo "=== Kurulum tamamlandı / Post-install complete ==="
 echo "Sistem Home Router olarak yeniden başlatılacak. / System will reboot into Home Router."
