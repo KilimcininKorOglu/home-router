@@ -20,7 +20,7 @@ var allowedCommands = map[string]bool{
 	"mdadm": true, "mkfs.ext4": true, "mount": true, "lsblk": true, "findmnt": true,
 	"smartctl": true, "hdparm": true, "tar": true,
 	"dig": true, "ping": true, "pgrep": true, "pkill": true, "killall": true,
-	"dhclient": true, "chpasswd": true, "bash": true, "df": true, "echo": true,
+	"dhclient": true, "chpasswd": true, "df": true,
 	"cp": true, "chmod": true, "mv": true, "rm": true, "kill": true,
 	"openssl": true, "usermod": true, "localectl": true, "loadkeys": true,
 }

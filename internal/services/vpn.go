@@ -118,7 +118,7 @@ func (s *VPNService) GenerateKeypair(ctx context.Context) (privateKey, publicKey
 	}
 	privateKey = strings.TrimSpace(privOut)
 
-	pubOut, err := netutil.RunSimple(ctx, "bash", "-c", fmt.Sprintf("echo '%s' | wg pubkey", privateKey))
+	pubOut, err := netutil.RunWithStdin(ctx, privateKey+"\n", "wg", "pubkey")
 	if err != nil {
 		return "", "", fmt.Errorf("pubkey: %w", err)
 	}
