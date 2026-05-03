@@ -274,7 +274,7 @@ func (h *SystemHandler) HandleCheckUpdate(w http.ResponseWriter, r *http.Request
 	lang := i18n.LangFromContext(r.Context())
 	info, err := h.update.CheckForUpdate(r.Context())
 	if err != nil {
-		fmt.Fprintf(w, `<div class="alert alert-error">%s: %s</div>`, h.loc.T(lang, "update.error"), err.Error())
+		fmt.Fprintf(w, `<div class="alert alert-error">%s: %s</div>`, h.loc.T(lang, "update.error"), html.EscapeString(err.Error()))
 		return
 	}
 
@@ -287,8 +287,8 @@ func (h *SystemHandler) HandleCheckUpdate(w http.ResponseWriter, r *http.Request
 	fmt.Fprintf(w, `<div style="margin-top:var(--space-md); padding:var(--space-md); border:1px solid var(--border-color); border-radius:var(--radius-md);">
 		<div style="font-weight:700; margin-bottom:var(--space-sm);">%s: %s</div>
 		<div style="color:var(--text-secondary); font-size:var(--font-sm); margin-bottom:var(--space-sm);">%s: %s</div>`,
-		h.loc.T(lang, "update.available"), info.LatestVersion,
-		h.loc.T(lang, "update.currentVersion"), info.CurrentVersion)
+		h.loc.T(lang, "update.available"), html.EscapeString(info.LatestVersion),
+		h.loc.T(lang, "update.currentVersion"), html.EscapeString(info.CurrentVersion))
 
 	if info.AssetSize > 0 {
 		fmt.Fprintf(w, `<div style="color:var(--text-secondary); font-size:var(--font-sm); margin-bottom:var(--space-sm);">%s: %.1f MB</div>`,
