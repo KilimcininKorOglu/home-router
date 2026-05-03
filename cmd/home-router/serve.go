@@ -36,7 +36,11 @@ func runServe() error {
 		b := make([]byte, 32)
 		crypto_rand.Read(b)
 		cfg.System.SessionSecret = fmt.Sprintf("%x", b)
-		log.Println("generated random session secret (not persisted)")
+		if err := cfg.SaveToFile(); err != nil {
+			log.Printf("failed to persist session secret: %v", err)
+		} else {
+			log.Println("generated and persisted random session secret")
+		}
 	}
 
 	loc, err := i18n.New(cfg.System.Language)
