@@ -2,6 +2,7 @@ package services
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -116,14 +117,12 @@ func (s *DHCPService) RenderConfig() error {
 		}
 	}
 
-	os.MkdirAll("/etc", 0o755)
-	f, err := os.Create("/etc/dnsmasq.conf")
-	if err != nil {
-		return fmt.Errorf("create dnsmasq.conf: %w", err)
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return fmt.Errorf("render dnsmasq.conf: %w", err)
 	}
-	defer f.Close()
 
-	return tmpl.Execute(f, data)
+	return netutil.WriteFile("/etc/dnsmasq.conf", buf.Bytes(), 0o644)
 }
 
 type Lease struct {

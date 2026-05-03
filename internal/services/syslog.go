@@ -39,7 +39,7 @@ func (s *SyslogService) ApplyConfig(ctx context.Context) error {
 	}
 
 	confPath := "/etc/rsyslog.d/50-home-router.conf"
-	if err := os.WriteFile(confPath, []byte(rendered), 0o644); err != nil {
+	if err := netutil.WriteFile(confPath, []byte(rendered), 0o644); err != nil {
 		return fmt.Errorf("write rsyslog config: %w", err)
 	}
 

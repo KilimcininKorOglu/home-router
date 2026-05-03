@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"text/template"
 
@@ -124,7 +123,7 @@ func (s *NTPService) ApplyConfig(ctx context.Context) error {
 		return err
 	}
 
-	if err := os.WriteFile("/etc/chrony/chrony.conf", []byte(rendered), 0o644); err != nil {
+	if err := netutil.WriteFile("/etc/chrony/chrony.conf", []byte(rendered), 0o644); err != nil {
 		return fmt.Errorf("write chrony config: %w", err)
 	}
 

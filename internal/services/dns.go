@@ -2,6 +2,7 @@ package services
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -112,14 +113,12 @@ func (s *DNSService) RenderConfig() error {
 		}
 	}
 
-	os.MkdirAll("/etc/unbound", 0o755)
-	f, err := os.Create("/etc/unbound/unbound.conf")
-	if err != nil {
-		return fmt.Errorf("create unbound.conf: %w", err)
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return fmt.Errorf("render unbound.conf: %w", err)
 	}
-	defer f.Close()
 
-	return tmpl.Execute(f, data)
+	return netutil.WriteFile("/etc/unbound/unbound.conf", buf.Bytes(), 0o644)
 }
 
 func (s *DNSService) Reload(ctx context.Context) error {
@@ -187,7 +186,7 @@ func (s *DNSService) UpdateBlocklist(ctx context.Context) error {
 		fmt.Fprintf(&buf, "local-zone: \"%s\" always_refuse\n", domain)
 	}
 
-	if err := os.WriteFile("/etc/unbound/blocklist.conf", []byte(buf.String()), 0o644); err != nil {
+	if err := netutil.WriteFile("/etc/unbound/blocklist.conf", []byte(buf.String()), 0o644); err != nil {
 		return fmt.Errorf("write blocklist: %w", err)
 	}
 
