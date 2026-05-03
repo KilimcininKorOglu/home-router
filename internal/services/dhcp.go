@@ -228,13 +228,13 @@ func (s *DHCPService) persist() error {
 	return s.cfg.SaveToFile()
 }
 
-func (s *DHCPService) AddStaticLease(mac, ip, hostname string) {
+func (s *DHCPService) AddStaticLease(mac, ip, hostname string) error {
 	s.cfg.DHCP.StaticLeases = append(s.cfg.DHCP.StaticLeases, config.StaticLease{
 		MAC:      mac,
 		IP:       ip,
 		Hostname: hostname,
 	})
-	s.persist()
+	return s.persist()
 }
 
 func (s *DHCPService) RemoveStaticLease(index int) error {

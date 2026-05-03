@@ -391,11 +391,11 @@ func (s *OpenVPNService) ImportClientConfig(name, ovpnContent string) {
 	s.persist()
 }
 
-func (s *OpenVPNService) AddOutboundClient(client config.OVPNClientConfig) {
+func (s *OpenVPNService) AddOutboundClient(client config.OVPNClientConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cfg.OpenVPN.Clients = append(s.cfg.OpenVPN.Clients, client)
-	s.persist()
+	return s.persist()
 }
 
 func (s *OpenVPNService) ListOutboundClients() []config.OVPNClientConfig {

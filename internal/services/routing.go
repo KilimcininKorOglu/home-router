@@ -46,7 +46,7 @@ func (s *RoutingService) persist() error {
 	return s.cfg.SaveToFile()
 }
 
-func (s *RoutingService) AddPolicy(policy config.RoutingPolicy) {
+func (s *RoutingService) AddPolicy(policy config.RoutingPolicy) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -61,7 +61,7 @@ func (s *RoutingService) AddPolicy(policy config.RoutingPolicy) {
 	}
 
 	s.cfg.Routing.Policies = append(s.cfg.Routing.Policies, policy)
-	s.persist()
+	return s.persist()
 }
 
 func (s *RoutingService) RemovePolicy(name string) error {
@@ -77,7 +77,7 @@ func (s *RoutingService) RemovePolicy(name string) error {
 	return fmt.Errorf("policy %q not found", name)
 }
 
-func (s *RoutingService) UpdatePriorities(orderedNames []string) {
+func (s *RoutingService) UpdatePriorities(orderedNames []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -91,7 +91,7 @@ func (s *RoutingService) UpdatePriorities(orderedNames []string) {
 			p.Priority = (i + 1) * 10
 		}
 	}
-	s.persist()
+	return s.persist()
 }
 
 func (s *RoutingService) TogglePolicy(name string, enabled bool) error {

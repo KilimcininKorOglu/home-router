@@ -60,7 +60,9 @@ func (h *DHCPHandler) HandleAddStatic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.dhcp.AddStaticLease(mac, ip, hostname)
+	if err := h.dhcp.AddStaticLease(mac, ip, hostname); err != nil {
+		log.Printf("add static lease: %v", err)
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Refresh", "true")

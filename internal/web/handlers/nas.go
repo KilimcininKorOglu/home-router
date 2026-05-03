@@ -49,7 +49,9 @@ func (h *NASHandler) HandleAddShare(w http.ResponseWriter, r *http.Request) {
 		ReadOnly: r.FormValue("readOnly") == "true" || r.FormValue("readOnly") == "on",
 	}
 
-	h.nas.AddShare(share)
+	if err := h.nas.AddShare(share); err != nil {
+		log.Printf("add share: %v", err)
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Refresh", "true")

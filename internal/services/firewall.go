@@ -139,9 +139,9 @@ func (s *FirewallService) persist() error {
 	return s.cfg.SaveToFile()
 }
 
-func (s *FirewallService) AddOpenPort(op config.OpenPort) {
+func (s *FirewallService) AddOpenPort(op config.OpenPort) error {
 	s.cfg.Firewall.OpenPorts = append(s.cfg.Firewall.OpenPorts, op)
-	s.persist()
+	return s.persist()
 }
 
 func (s *FirewallService) RemoveOpenPort(index int) error {
@@ -167,9 +167,9 @@ func (s *FirewallService) GetOpenPorts() []config.OpenPort {
 	return s.cfg.Firewall.OpenPorts
 }
 
-func (s *FirewallService) AddPortForward(pf config.PortForward) {
+func (s *FirewallService) AddPortForward(pf config.PortForward) error {
 	s.cfg.Firewall.PortForwards = append(s.cfg.Firewall.PortForwards, pf)
-	s.persist()
+	return s.persist()
 }
 
 func (s *FirewallService) RemovePortForward(index int) error {
@@ -183,7 +183,7 @@ func (s *FirewallService) RemovePortForward(index int) error {
 	return s.persist()
 }
 
-func (s *FirewallService) AddRule(rule config.FirewallRule) {
+func (s *FirewallService) AddRule(rule config.FirewallRule) error {
 	if rule.Priority == 0 {
 		maxPrio := 0
 		for _, r := range s.cfg.Firewall.Rules {
@@ -194,7 +194,7 @@ func (s *FirewallService) AddRule(rule config.FirewallRule) {
 		rule.Priority = maxPrio + 10
 	}
 	s.cfg.Firewall.Rules = append(s.cfg.Firewall.Rules, rule)
-	s.persist()
+	return s.persist()
 }
 
 func (s *FirewallService) RemoveRule(index int) error {

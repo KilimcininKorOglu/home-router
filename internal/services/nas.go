@@ -41,11 +41,11 @@ func (s *NASService) persist() error {
 	return s.cfg.SaveToFile()
 }
 
-func (s *NASService) AddShare(share config.ShareConfig) {
+func (s *NASService) AddShare(share config.ShareConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cfg.NAS.Shares = append(s.cfg.NAS.Shares, share)
-	s.persist()
+	return s.persist()
 }
 
 func (s *NASService) RemoveShare(name string) error {

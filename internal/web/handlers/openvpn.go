@@ -173,7 +173,9 @@ func (h *OpenVPNHandler) HandleAddOutboundClient(w http.ResponseWriter, r *http.
 		Password:   r.FormValue("password"),
 	}
 
-	h.ovpn.AddOutboundClient(client)
+	if err := h.ovpn.AddOutboundClient(client); err != nil {
+		log.Printf("add outbound client: %v", err)
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Refresh", "true")

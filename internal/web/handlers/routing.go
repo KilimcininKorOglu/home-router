@@ -86,7 +86,9 @@ func (h *RoutingHandler) HandleAddPolicy(w http.ResponseWriter, r *http.Request)
 		policy.Domains = cleaned
 	}
 
-	h.routing.AddPolicy(policy)
+	if err := h.routing.AddPolicy(policy); err != nil {
+		log.Printf("add policy: %v", err)
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Refresh", "true")
@@ -118,7 +120,9 @@ func (h *RoutingHandler) HandleReorder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.routing.UpdatePriorities(names)
+	if err := h.routing.UpdatePriorities(names); err != nil {
+		log.Printf("update priorities: %v", err)
+	}
 
 	w.WriteHeader(http.StatusOK)
 }

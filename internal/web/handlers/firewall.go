@@ -112,7 +112,9 @@ func (h *FirewallHandler) HandleAddPortForward(w http.ResponseWriter, r *http.Re
 		Enabled:  true,
 	}
 
-	h.firewall.AddPortForward(pf)
+	if err := h.firewall.AddPortForward(pf); err != nil {
+		log.Printf("add port forward: %v", err)
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Trigger", "portForwardAdded")
@@ -164,7 +166,9 @@ func (h *FirewallHandler) HandleAddRule(w http.ResponseWriter, r *http.Request) 
 		Enabled:   true,
 	}
 
-	h.firewall.AddRule(rule)
+	if err := h.firewall.AddRule(rule); err != nil {
+		log.Printf("add rule: %v", err)
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Refresh", "true")
@@ -231,7 +235,9 @@ func (h *FirewallHandler) HandleAddOpenPort(w http.ResponseWriter, r *http.Reque
 		Enabled:  true,
 	}
 
-	h.firewall.AddOpenPort(op)
+	if err := h.firewall.AddOpenPort(op); err != nil {
+		log.Printf("add open port: %v", err)
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Refresh", "true")
