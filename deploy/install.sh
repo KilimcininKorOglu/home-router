@@ -148,31 +148,136 @@ setup_default_config() {
     fi
 }
 
-setup_admin_password() {
+ask_hostname() {
+    echo ""
+    echo "=== Hostname ==="
+    local hostname
+    read -rp "Enter hostname [hermes]: " hostname
+    hostname="${hostname:-hermes}"
+
+    sed -i "s/hostname: \".*\"/hostname: \"$hostname\"/" "$CONFIG_DIR/router.yaml"
+    hostnamectl set-hostname "$hostname" 2>/dev/null || true
+    log_info "Hostname set to: $hostname"
+}
+
+ask_root_password() {
+    echo ""
+    echo "=== Root Password ==="
+    local password password_confirm
+    while true; do
+        read -rsp "Enter root (SSH/console) password (min 8 chars): " password
+        echo ""
+        if [[ ${#password} -lt 8 ]]; then
+            log_error "Password must be at least 8 characters"
+            continue
+        fi
+        read -rsp "Confirm root password: " password_confirm
+        echo ""
+        if [[ "$password" != "$password_confirm" ]]; then
+            log_error "Passwords do not match"
+            continue
+        fi
+        break
+    done
+
+    echo "root:$password" | chpasswd
+    log_info "Root password updated"
+}
+
+ask_admin_password() {
     if [[ -f "$CONFIG_DIR/router.yaml" ]] && grep -q 'adminPasswordHash: "\$' "$CONFIG_DIR/router.yaml" 2>/dev/null; then
         log_info "Admin password already set"
         return
     fi
 
     echo ""
-    echo "=== Initial Admin Setup ==="
+    echo "=== Web UI Admin Password ==="
     local password password_confirm
-    read -rsp "Enter admin password: " password
-    echo ""
-    read -rsp "Confirm admin password: " password_confirm
-    echo ""
+    while true; do
+        read -rsp "Enter web UI admin password (min 8 chars): " password
+        echo ""
+        if [[ ${#password} -lt 8 ]]; then
+            log_error "Password must be at least 8 characters"
+            continue
+        fi
+        read -rsp "Confirm admin password: " password_confirm
+        echo ""
+        if [[ "$password" != "$password_confirm" ]]; then
+            log_error "Passwords do not match"
+            continue
+        fi
+        break
+    done
 
-    if [[ "$password" != "$password_confirm" ]]; then
-        log_error "Passwords do not match"
-        exit 1
+    local hash
+    hash=$(python3 -c "import bcrypt; print(bcrypt.hashpw(b'$password', bcrypt.gensalt()).decode())" 2>/dev/null) || \
+    hash=$("$INSTALL_DIR/$BINARY_NAME" hash-password "$password" 2>/dev/null) || \
+    hash=""
+
+    if [[ -n "$hash" ]]; then
+        sed -i "s|adminPasswordHash: \".*\"|adminPasswordHash: \"$hash\"|" "$CONFIG_DIR/router.yaml"
+        log_info "Admin password hash written to config"
+    else
+        log_warn "Could not hash password — will be set on first start"
     fi
+}
 
-    if [[ ${#password} -lt 8 ]]; then
-        log_error "Password must be at least 8 characters"
-        exit 1
-    fi
+ask_timezone() {
+    echo ""
+    echo "=== Timezone ==="
+    echo "  1) Europe/Istanbul (default)"
+    echo "  2) Europe/London"
+    echo "  3) Europe/Berlin"
+    echo "  4) America/New_York"
+    echo "  5) America/Los_Angeles"
+    echo "  6) Asia/Tokyo"
+    echo "  7) UTC"
+    local choice
+    read -rp "Select timezone [1]: " choice
+    choice="${choice:-1}"
 
-    log_info "Admin password will be set on first start"
+    local tz
+    case "$choice" in
+        1) tz="Europe/Istanbul" ;;
+        2) tz="Europe/London" ;;
+        3) tz="Europe/Berlin" ;;
+        4) tz="America/New_York" ;;
+        5) tz="America/Los_Angeles" ;;
+        6) tz="Asia/Tokyo" ;;
+        7) tz="UTC" ;;
+        *) tz="Europe/Istanbul" ;;
+    esac
+
+    sed -i "s/timezone: \".*\"/timezone: \"$tz\"/" "$CONFIG_DIR/router.yaml"
+    timedatectl set-timezone "$tz" 2>/dev/null || true
+    log_info "Timezone set to: $tz"
+}
+
+ask_keyboard() {
+    echo ""
+    echo "=== Keyboard Layout ==="
+    echo "  1) tr — Turkish Q (default)"
+    echo "  2) us — US English"
+    echo "  3) de — German"
+    echo "  4) fr — French"
+    echo "  5) uk — UK English"
+    local choice
+    read -rp "Select keyboard layout [1]: " choice
+    choice="${choice:-1}"
+
+    local kb
+    case "$choice" in
+        1) kb="tr" ;;
+        2) kb="us" ;;
+        3) kb="de" ;;
+        4) kb="fr" ;;
+        5) kb="uk" ;;
+        *) kb="tr" ;;
+    esac
+
+    localectl set-keymap "$kb" 2>/dev/null || \
+    loadkeys "$kb" 2>/dev/null || true
+    log_info "Keyboard layout set to: $kb"
 }
 
 print_summary() {
@@ -325,7 +430,11 @@ main() {
     setup_dhcp_dns_script
     setup_sysconf_templates
     setup_default_config
-    setup_admin_password
+    ask_hostname
+    ask_root_password
+    ask_admin_password
+    ask_timezone
+    ask_keyboard
     setup_initial_tls
     print_summary
 }
