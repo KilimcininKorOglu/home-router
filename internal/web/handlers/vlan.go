@@ -85,7 +85,8 @@ func (h *VLANHandler) HandleAdd(w http.ResponseWriter, r *http.Request) {
 
 	h.cfg.VLANs = append(h.cfg.VLANs, vlan)
 	if err := h.cfg.SaveToFile(); err != nil {
-		log.Printf("save config: %v", err)
+		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
 	}
 
 	var parentDev string
@@ -128,7 +129,8 @@ func (h *VLANHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 
 			h.cfg.VLANs = append(h.cfg.VLANs[:i], h.cfg.VLANs[i+1:]...)
 			if err := h.cfg.SaveToFile(); err != nil {
-				log.Printf("save config: %v", err)
+				http.Error(w, "save failed", http.StatusInternalServerError)
+				return
 			}
 			break
 		}

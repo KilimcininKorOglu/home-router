@@ -59,7 +59,8 @@ func (h *QoSHandler) HandleApply(w http.ResponseWriter, r *http.Request) {
 
 	h.cfg.QoS.Enabled = r.FormValue("enabled") == "true" || r.FormValue("enabled") == "on"
 	if err := h.cfg.SaveToFile(); err != nil {
-		log.Printf("save config: %v", err)
+		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
 	}
 
 	if err := h.qos.Apply(r.Context()); err != nil {
@@ -85,7 +86,8 @@ func (h *QoSHandler) HandleClear(w http.ResponseWriter, r *http.Request) {
 
 	h.cfg.QoS.Enabled = false
 	if err := h.cfg.SaveToFile(); err != nil {
-		log.Printf("save config: %v", err)
+		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
