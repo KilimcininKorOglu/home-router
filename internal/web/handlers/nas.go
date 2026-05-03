@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"html"
 	"log"
 	"net/http"
 
@@ -100,6 +101,7 @@ func (h *NASHandler) HandleDiscoverGroups(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	for _, g := range groups {
-		fmt.Fprintf(w, `<label style="display:flex;align-items:center;gap:var(--space-xs);cursor:pointer;padding:var(--space-xs) 0;"><input type="checkbox" name="includeGroups" value="%s" checked> %s</label>`, g, g)
+		escaped := html.EscapeString(g)
+		fmt.Fprintf(w, `<label style="display:flex;align-items:center;gap:var(--space-xs);cursor:pointer;padding:var(--space-xs) 0;"><input type="checkbox" name="includeGroups" value="%s" checked> %s</label>`, escaped, escaped)
 	}
 }
