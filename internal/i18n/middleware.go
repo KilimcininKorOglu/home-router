@@ -12,7 +12,7 @@ func LangFromContext(ctx context.Context) string {
 	if lang, ok := ctx.Value(ctxKey{}).(string); ok {
 		return lang
 	}
-	return "tr"
+	return "en"
 }
 
 func Middleware(i *I18n) func(http.Handler) http.Handler {

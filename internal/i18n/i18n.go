@@ -21,7 +21,7 @@ type I18n struct {
 
 func New(fallback string) (*I18n, error) {
 	if fallback == "" {
-		fallback = "tr"
+		fallback = "en"
 	}
 	return &I18n{
 		locales:  make(map[string]*Locale),

@@ -6,7 +6,7 @@ func DefaultConfig() *Config {
 			Hostname:  "hermes",
 			Domain:    "lan",
 			Timezone:  "Europe/Istanbul",
-			Language:  "tr",
+			Language:  "en",
 			WebPort:   8443,
 			WebBind:   "10.10.10.1",
 			TLS: TLSConfig{

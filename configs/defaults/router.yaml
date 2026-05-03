@@ -2,7 +2,7 @@ system:
   hostname: "hermes"
   domain: "lan"
   timezone: "Europe/Istanbul"
-  language: "tr"
+  language: "en"
   adminPasswordHash: ""
   sessionSecret: ""
   webPort: 8443
