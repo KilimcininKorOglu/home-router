@@ -232,7 +232,8 @@ func (h *OpenVPNHandler) HandleAddOutboundClient(w http.ResponseWriter, r *http.
 	}
 
 	if err := h.ovpn.AddOutboundClient(client); err != nil {
-		log.Printf("add outbound client: %v", err)
+		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
 	}
 
 	if r.Header.Get("HX-Request") == "true" {

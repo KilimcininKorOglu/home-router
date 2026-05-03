@@ -61,7 +61,8 @@ func (h *DHCPHandler) HandleAddStatic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.dhcp.AddStaticLease(mac, ip, hostname); err != nil {
-		log.Printf("add static lease: %v", err)
+		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
 	}
 
 	if r.Header.Get("HX-Request") == "true" {

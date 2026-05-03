@@ -103,17 +103,29 @@ func (h *FirewallHandler) HandleAddPortForward(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	protocol := r.FormValue("protocol")
+	if protocol != "tcp" && protocol != "udp" && protocol != "both" {
+		http.Error(w, "invalid protocol", http.StatusBadRequest)
+		return
+	}
+	intIP := r.FormValue("intIP")
+	if netutil.ValidateIP(intIP) != nil {
+		http.Error(w, "invalid internal IP", http.StatusBadRequest)
+		return
+	}
+
 	pf := config.PortForward{
 		Name:     r.FormValue("name"),
-		Protocol: r.FormValue("protocol"),
+		Protocol: protocol,
 		ExtPort:  extPort,
-		IntIP:    r.FormValue("intIP"),
+		IntIP:    intIP,
 		IntPort:  intPort,
 		Enabled:  true,
 	}
 
 	if err := h.firewall.AddPortForward(pf); err != nil {
-		log.Printf("add port forward: %v", err)
+		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
@@ -153,21 +165,53 @@ func (h *FirewallHandler) HandleAddRule(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	chain := r.FormValue("chain")
+	if chain != "input" && chain != "forward" && chain != "output" {
+		http.Error(w, "invalid chain", http.StatusBadRequest)
+		return
+	}
+	action := r.FormValue("action")
+	if action != "accept" && action != "drop" && action != "reject" {
+		http.Error(w, "invalid action", http.StatusBadRequest)
+		return
+	}
+	protocol := r.FormValue("protocol")
+	if protocol != "" && protocol != "tcp" && protocol != "udp" && protocol != "icmp" {
+		http.Error(w, "invalid protocol", http.StatusBadRequest)
+		return
+	}
+	direction := r.FormValue("direction")
+	if direction != "" && direction != "in" && direction != "out" {
+		http.Error(w, "invalid direction", http.StatusBadRequest)
+		return
+	}
+	srcIP := r.FormValue("srcIP")
+	if srcIP != "" && netutil.ValidateCIDR(srcIP) != nil && netutil.ValidateIP(srcIP) != nil {
+		http.Error(w, "invalid source IP/CIDR", http.StatusBadRequest)
+		return
+	}
+	dstIP := r.FormValue("dstIP")
+	if dstIP != "" && netutil.ValidateCIDR(dstIP) != nil && netutil.ValidateIP(dstIP) != nil {
+		http.Error(w, "invalid destination IP/CIDR", http.StatusBadRequest)
+		return
+	}
+
 	rule := config.FirewallRule{
 		Name:      r.FormValue("name"),
-		Chain:     r.FormValue("chain"),
-		Action:    r.FormValue("action"),
-		SrcIP:     r.FormValue("srcIP"),
-		DstIP:     r.FormValue("dstIP"),
-		Protocol:  r.FormValue("protocol"),
+		Chain:     chain,
+		Action:    action,
+		SrcIP:     srcIP,
+		DstIP:     dstIP,
+		Protocol:  protocol,
 		Port:      port,
 		Interface: r.FormValue("interface"),
-		Direction: r.FormValue("direction"),
+		Direction: direction,
 		Enabled:   true,
 	}
 
 	if err := h.firewall.AddRule(rule); err != nil {
-		log.Printf("add rule: %v", err)
+		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
@@ -227,16 +271,28 @@ func (h *FirewallHandler) HandleAddOpenPort(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	protocol := r.FormValue("protocol")
+	if protocol != "tcp" && protocol != "udp" && protocol != "both" {
+		http.Error(w, "invalid protocol", http.StatusBadRequest)
+		return
+	}
+	source := r.FormValue("source")
+	if source != "" && netutil.ValidateCIDR(source) != nil && netutil.ValidateIP(source) != nil {
+		http.Error(w, "invalid source IP/CIDR", http.StatusBadRequest)
+		return
+	}
+
 	op := config.OpenPort{
 		Name:     r.FormValue("name"),
-		Protocol: r.FormValue("protocol"),
+		Protocol: protocol,
 		Port:     port,
-		Source:   r.FormValue("source"),
+		Source:   source,
 		Enabled:  true,
 	}
 
 	if err := h.firewall.AddOpenPort(op); err != nil {
-		log.Printf("add open port: %v", err)
+		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
 	}
 
 	if r.Header.Get("HX-Request") == "true" {

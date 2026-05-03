@@ -87,7 +87,8 @@ func (h *RoutingHandler) HandleAddPolicy(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.routing.AddPolicy(policy); err != nil {
-		log.Printf("add policy: %v", err)
+		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
@@ -121,7 +122,8 @@ func (h *RoutingHandler) HandleReorder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.routing.UpdatePriorities(names); err != nil {
-		log.Printf("update priorities: %v", err)
+		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)

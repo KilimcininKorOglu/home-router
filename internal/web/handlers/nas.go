@@ -74,7 +74,8 @@ func (h *NASHandler) HandleAddShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.nas.AddShare(share); err != nil {
-		log.Printf("add share: %v", err)
+		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
