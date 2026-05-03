@@ -8,6 +8,7 @@ import (
 
 	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
+	"github.com/KilimcininKorOglu/home-router/internal/netutil"
 	"github.com/KilimcininKorOglu/home-router/internal/services"
 	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
 )
@@ -153,7 +154,11 @@ func (h *OpenVPNHandler) HandleAddOutboundClient(w http.ResponseWriter, r *http.
 	}
 
 	rawConfig := r.FormValue("configFile")
-	port, _ := strconv.Atoi(r.FormValue("remotePort"))
+	port, err := strconv.Atoi(r.FormValue("remotePort"))
+	if err != nil || netutil.ValidatePort(port) != nil {
+		http.Error(w, "invalid port", http.StatusBadRequest)
+		return
+	}
 
 	client := config.OVPNClientConfig{
 		Name:       name,

@@ -8,6 +8,7 @@ import (
 
 	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
+	"github.com/KilimcininKorOglu/home-router/internal/netutil"
 	"github.com/KilimcininKorOglu/home-router/internal/services"
 	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
 )
@@ -49,15 +50,40 @@ func (h *RoutingHandler) HandleAddPolicy(w http.ResponseWriter, r *http.Request)
 
 	if srcMACs := r.FormValue("srcMacs"); srcMACs != "" {
 		policy.SrcMACs = strings.Split(srcMACs, ",")
+		for _, mac := range policy.SrcMACs {
+			if netutil.ValidateMAC(strings.TrimSpace(mac)) != nil {
+				http.Error(w, "invalid MAC: "+mac, http.StatusBadRequest)
+				return
+			}
+		}
 	}
 	if srcIPs := r.FormValue("srcIps"); srcIPs != "" {
 		policy.SrcIPs = strings.Split(srcIPs, ",")
+		for _, cidr := range policy.SrcIPs {
+			if netutil.ValidateCIDR(strings.TrimSpace(cidr)) != nil {
+				http.Error(w, "invalid CIDR: "+cidr, http.StatusBadRequest)
+				return
+			}
+		}
 	}
 	if dstIPs := r.FormValue("dstIps"); dstIPs != "" {
 		policy.DstIPs = strings.Split(dstIPs, ",")
+		for _, cidr := range policy.DstIPs {
+			if netutil.ValidateCIDR(strings.TrimSpace(cidr)) != nil {
+				http.Error(w, "invalid CIDR: "+cidr, http.StatusBadRequest)
+				return
+			}
+		}
 	}
 	if domains := r.FormValue("domains"); domains != "" {
-		policy.Domains = strings.Split(domains, "\n")
+		var cleaned []string
+		for _, d := range strings.Split(domains, "\n") {
+			d = strings.TrimSpace(d)
+			if d != "" {
+				cleaned = append(cleaned, d)
+			}
+		}
+		policy.Domains = cleaned
 	}
 
 	h.routing.AddPolicy(policy)

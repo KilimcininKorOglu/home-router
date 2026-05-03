@@ -7,6 +7,7 @@ import (
 
 	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
+	"github.com/KilimcininKorOglu/home-router/internal/netutil"
 	"github.com/KilimcininKorOglu/home-router/internal/services"
 	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
 )
@@ -47,8 +48,16 @@ func (h *VLANHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 func (h *VLANHandler) HandleAdd(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
-	vid, _ := strconv.Atoi(r.FormValue("vid"))
-	mtu, _ := strconv.Atoi(r.FormValue("mtu"))
+	vid, err := strconv.Atoi(r.FormValue("vid"))
+	if err != nil || netutil.ValidateVLANID(vid) != nil {
+		http.Error(w, "invalid VLAN ID", http.StatusBadRequest)
+		return
+	}
+	mtu, err := strconv.Atoi(r.FormValue("mtu"))
+	if err != nil && r.FormValue("mtu") != "" {
+		http.Error(w, "invalid MTU", http.StatusBadRequest)
+		return
+	}
 	if mtu == 0 {
 		mtu = 1500
 	}

@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
+	"github.com/KilimcininKorOglu/home-router/internal/netutil"
 	"github.com/KilimcininKorOglu/home-router/internal/services"
 	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
 )
@@ -41,7 +42,25 @@ func (h *DHCPHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 
 func (h *DHCPHandler) HandleAddStatic(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	h.dhcp.AddStaticLease(r.FormValue("mac"), r.FormValue("ip"), r.FormValue("hostname"))
+
+	mac := r.FormValue("mac")
+	ip := r.FormValue("ip")
+	hostname := r.FormValue("hostname")
+
+	if netutil.ValidateMAC(mac) != nil {
+		http.Error(w, "invalid MAC address", http.StatusBadRequest)
+		return
+	}
+	if netutil.ValidateIP(ip) != nil {
+		http.Error(w, "invalid IP address", http.StatusBadRequest)
+		return
+	}
+	if hostname == "" {
+		http.Error(w, "hostname required", http.StatusBadRequest)
+		return
+	}
+
+	h.dhcp.AddStaticLease(mac, ip, hostname)
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Refresh", "true")

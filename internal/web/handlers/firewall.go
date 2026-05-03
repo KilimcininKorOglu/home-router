@@ -7,6 +7,7 @@ import (
 
 	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
+	"github.com/KilimcininKorOglu/home-router/internal/netutil"
 	"github.com/KilimcininKorOglu/home-router/internal/services"
 	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
 )
@@ -91,8 +92,16 @@ func (h *FirewallHandler) HandleRollback(w http.ResponseWriter, r *http.Request)
 func (h *FirewallHandler) HandleAddPortForward(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
-	extPort, _ := strconv.Atoi(r.FormValue("extPort"))
-	intPort, _ := strconv.Atoi(r.FormValue("intPort"))
+	extPort, err := strconv.Atoi(r.FormValue("extPort"))
+	if err != nil || netutil.ValidatePort(extPort) != nil {
+		http.Error(w, "invalid port", http.StatusBadRequest)
+		return
+	}
+	intPort, err := strconv.Atoi(r.FormValue("intPort"))
+	if err != nil || netutil.ValidatePort(intPort) != nil {
+		http.Error(w, "invalid port", http.StatusBadRequest)
+		return
+	}
 
 	pf := config.PortForward{
 		Name:     r.FormValue("name"),
@@ -114,7 +123,11 @@ func (h *FirewallHandler) HandleAddPortForward(w http.ResponseWriter, r *http.Re
 }
 
 func (h *FirewallHandler) HandleDeletePortForward(w http.ResponseWriter, r *http.Request) {
-	idx, _ := strconv.Atoi(r.PathValue("index"))
+	idx, err := strconv.Atoi(r.PathValue("index"))
+	if err != nil {
+		http.Error(w, "invalid index", http.StatusBadRequest)
+		return
+	}
 
 	if err := h.firewall.RemovePortForward(idx); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -132,7 +145,11 @@ func (h *FirewallHandler) HandleDeletePortForward(w http.ResponseWriter, r *http
 func (h *FirewallHandler) HandleAddRule(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
-	port, _ := strconv.Atoi(r.FormValue("port"))
+	port, err := strconv.Atoi(r.FormValue("port"))
+	if err != nil || netutil.ValidatePort(port) != nil {
+		http.Error(w, "invalid port", http.StatusBadRequest)
+		return
+	}
 
 	rule := config.FirewallRule{
 		Name:      r.FormValue("name"),
@@ -158,7 +175,11 @@ func (h *FirewallHandler) HandleAddRule(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *FirewallHandler) HandleDeleteRule(w http.ResponseWriter, r *http.Request) {
-	idx, _ := strconv.Atoi(r.PathValue("index"))
+	idx, err := strconv.Atoi(r.PathValue("index"))
+	if err != nil {
+		http.Error(w, "invalid index", http.StatusBadRequest)
+		return
+	}
 
 	if err := h.firewall.RemoveRule(idx); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -174,7 +195,11 @@ func (h *FirewallHandler) HandleDeleteRule(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *FirewallHandler) HandleToggleRule(w http.ResponseWriter, r *http.Request) {
-	idx, _ := strconv.Atoi(r.PathValue("index"))
+	idx, err := strconv.Atoi(r.PathValue("index"))
+	if err != nil {
+		http.Error(w, "invalid index", http.StatusBadRequest)
+		return
+	}
 	enabled := r.FormValue("enabled") == "true"
 
 	if err := h.firewall.ToggleRule(idx, enabled); err != nil {
@@ -192,7 +217,11 @@ func (h *FirewallHandler) HandleToggleRule(w http.ResponseWriter, r *http.Reques
 
 func (h *FirewallHandler) HandleAddOpenPort(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	port, _ := strconv.Atoi(r.FormValue("port"))
+	port, err := strconv.Atoi(r.FormValue("port"))
+	if err != nil || netutil.ValidatePort(port) != nil {
+		http.Error(w, "invalid port", http.StatusBadRequest)
+		return
+	}
 
 	op := config.OpenPort{
 		Name:     r.FormValue("name"),
@@ -213,7 +242,11 @@ func (h *FirewallHandler) HandleAddOpenPort(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *FirewallHandler) HandleDeleteOpenPort(w http.ResponseWriter, r *http.Request) {
-	idx, _ := strconv.Atoi(r.PathValue("index"))
+	idx, err := strconv.Atoi(r.PathValue("index"))
+	if err != nil {
+		http.Error(w, "invalid index", http.StatusBadRequest)
+		return
+	}
 
 	if err := h.firewall.RemoveOpenPort(idx); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -229,7 +262,11 @@ func (h *FirewallHandler) HandleDeleteOpenPort(w http.ResponseWriter, r *http.Re
 }
 
 func (h *FirewallHandler) HandleToggleOpenPort(w http.ResponseWriter, r *http.Request) {
-	idx, _ := strconv.Atoi(r.PathValue("index"))
+	idx, err := strconv.Atoi(r.PathValue("index"))
+	if err != nil {
+		http.Error(w, "invalid index", http.StatusBadRequest)
+		return
+	}
 	enabled := r.FormValue("enabled") == "true"
 
 	if err := h.firewall.ToggleOpenPort(idx, enabled); err != nil {
