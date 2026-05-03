@@ -42,6 +42,12 @@ func (s *RoutingService) GetPolicies() []config.RoutingPolicy {
 	return policies
 }
 
+func (s *RoutingService) persist() {
+	if err := s.cfg.SaveToFile(); err != nil {
+		log.Printf("persist routing config: %v", err)
+	}
+}
+
 func (s *RoutingService) AddPolicy(policy config.RoutingPolicy) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -57,6 +63,7 @@ func (s *RoutingService) AddPolicy(policy config.RoutingPolicy) {
 	}
 
 	s.cfg.Routing.Policies = append(s.cfg.Routing.Policies, policy)
+	s.persist()
 }
 
 func (s *RoutingService) RemovePolicy(name string) error {
@@ -66,6 +73,7 @@ func (s *RoutingService) RemovePolicy(name string) error {
 	for i, p := range s.cfg.Routing.Policies {
 		if p.Name == name {
 			s.cfg.Routing.Policies = append(s.cfg.Routing.Policies[:i], s.cfg.Routing.Policies[i+1:]...)
+			s.persist()
 			return nil
 		}
 	}
@@ -86,6 +94,7 @@ func (s *RoutingService) UpdatePriorities(orderedNames []string) {
 			p.Priority = (i + 1) * 10
 		}
 	}
+	s.persist()
 }
 
 func (s *RoutingService) TogglePolicy(name string, enabled bool) error {
@@ -95,6 +104,7 @@ func (s *RoutingService) TogglePolicy(name string, enabled bool) error {
 	for i := range s.cfg.Routing.Policies {
 		if s.cfg.Routing.Policies[i].Name == name {
 			s.cfg.Routing.Policies[i].Enabled = enabled
+			s.persist()
 			return nil
 		}
 	}

@@ -233,7 +233,14 @@ func (s *VPNService) AddPeer(ctx context.Context, name string, siteToSite bool, 
 	s.cfg.VPN.Server.Peers = append(s.cfg.VPN.Server.Peers, peer)
 	s.mu.Unlock()
 
+	s.persist()
 	return &peer, privKey, nil
+}
+
+func (s *VPNService) persist() {
+	if err := s.cfg.SaveToFile(); err != nil {
+		log.Printf("persist vpn config: %v", err)
+	}
 }
 
 func (s *VPNService) RemovePeer(name string) error {
@@ -243,6 +250,7 @@ func (s *VPNService) RemovePeer(name string) error {
 	for i, p := range s.cfg.VPN.Server.Peers {
 		if p.Name == name {
 			s.cfg.VPN.Server.Peers = append(s.cfg.VPN.Server.Peers[:i], s.cfg.VPN.Server.Peers[i+1:]...)
+			s.persist()
 			return nil
 		}
 	}
