@@ -3,12 +3,16 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
+	"github.com/KilimcininKorOglu/home-router/internal/netutil"
 	"github.com/KilimcininKorOglu/home-router/internal/services"
 	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
 )
+
+var vpnNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 type VPNHandler struct {
 	renderer *tmpl.Renderer
@@ -47,15 +51,27 @@ func (h *VPNHandler) HandleAddPeer(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name required", http.StatusBadRequest)
 		return
 	}
+	if len(name) > 64 || !vpnNamePattern.MatchString(name) {
+		http.Error(w, "name must be alphanumeric, dashes, or underscores (max 64 chars)", http.StatusBadRequest)
+		return
+	}
 
 	peerType := r.FormValue("peerType")
 	siteToSite := peerType == "site-to-site"
 	endpoint := r.FormValue("endpoint")
+	if endpoint != "" && !strings.Contains(endpoint, ":") {
+		http.Error(w, "endpoint must be in host:port format", http.StatusBadRequest)
+		return
+	}
 
 	var remoteSubnets []string
 	if raw := strings.TrimSpace(r.FormValue("remoteSubnets")); raw != "" && siteToSite {
 		for _, s := range strings.Split(raw, ",") {
 			if trimmed := strings.TrimSpace(s); trimmed != "" {
+				if err := netutil.ValidateCIDR(trimmed); err != nil {
+					http.Error(w, "invalid CIDR in remoteSubnets: "+trimmed, http.StatusBadRequest)
+					return
+				}
 				remoteSubnets = append(remoteSubnets, trimmed)
 			}
 		}

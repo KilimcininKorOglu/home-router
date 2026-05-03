@@ -5,12 +5,16 @@ import (
 	"html"
 	"log"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
 	"github.com/KilimcininKorOglu/home-router/internal/services"
 	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
 )
+
+var nasNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 type NASHandler struct {
 	renderer *tmpl.Renderer
@@ -42,9 +46,29 @@ func (h *NASHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 func (h *NASHandler) HandleAddShare(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
+	name := r.FormValue("name")
+	if name == "" {
+		http.Error(w, "name required", http.StatusBadRequest)
+		return
+	}
+	if len(name) > 64 || !nasNamePattern.MatchString(name) {
+		http.Error(w, "name must be alphanumeric, dashes, or underscores (max 64 chars)", http.StatusBadRequest)
+		return
+	}
+
+	path := r.FormValue("path")
+	if path == "" {
+		http.Error(w, "path required", http.StatusBadRequest)
+		return
+	}
+	if !strings.HasPrefix(path, "/srv/") && !strings.HasPrefix(path, "/mnt/") {
+		http.Error(w, "path must start with /srv/ or /mnt/", http.StatusBadRequest)
+		return
+	}
+
 	share := config.ShareConfig{
-		Name:     r.FormValue("name"),
-		Path:     r.FormValue("path"),
+		Name:     name,
+		Path:     path,
 		GuestOK:  r.FormValue("guestOk") == "true" || r.FormValue("guestOk") == "on",
 		ReadOnly: r.FormValue("readOnly") == "true" || r.FormValue("readOnly") == "on",
 	}

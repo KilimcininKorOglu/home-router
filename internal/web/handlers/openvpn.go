@@ -3,6 +3,7 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -12,6 +13,21 @@ import (
 	"github.com/KilimcininKorOglu/home-router/internal/services"
 	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
 )
+
+var ovpnNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+var validCiphers = map[string]bool{
+	"AES-256-GCM":       true,
+	"AES-128-GCM":       true,
+	"AES-256-CBC":       true,
+	"CHACHA20-POLY1305": true,
+}
+
+var validAuths = map[string]bool{
+	"SHA256": true,
+	"SHA384": true,
+	"SHA512": true,
+}
 
 type OpenVPNHandler struct {
 	renderer *tmpl.Renderer
@@ -65,15 +81,29 @@ func (h *OpenVPNHandler) HandleAddClient(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "name required", http.StatusBadRequest)
 		return
 	}
+	if len(name) > 64 || !ovpnNamePattern.MatchString(name) {
+		http.Error(w, "name must be alphanumeric, dashes, or underscores (max 64 chars)", http.StatusBadRequest)
+		return
+	}
 
 	peerType := r.FormValue("peerType")
 	siteToSite := peerType == "site-to-site"
 	fixedIP := r.FormValue("fixedIP")
+	if fixedIP != "" {
+		if err := netutil.ValidateIP(fixedIP); err != nil {
+			http.Error(w, "invalid fixedIP: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 
 	var remoteSubnets []string
 	if raw := strings.TrimSpace(r.FormValue("remoteSubnets")); raw != "" && siteToSite {
 		for _, s := range strings.Split(raw, ",") {
 			if trimmed := strings.TrimSpace(s); trimmed != "" {
+				if err := netutil.ValidateCIDR(trimmed); err != nil {
+					http.Error(w, "invalid CIDR in remoteSubnets: "+trimmed, http.StatusBadRequest)
+					return
+				}
 				remoteSubnets = append(remoteSubnets, trimmed)
 			}
 		}
@@ -152,6 +182,34 @@ func (h *OpenVPNHandler) HandleAddOutboundClient(w http.ResponseWriter, r *http.
 		http.Error(w, "name required", http.StatusBadRequest)
 		return
 	}
+	if len(name) > 64 || !ovpnNamePattern.MatchString(name) {
+		http.Error(w, "name must be alphanumeric, dashes, or underscores (max 64 chars)", http.StatusBadRequest)
+		return
+	}
+
+	remoteHost := r.FormValue("remoteHost")
+	if remoteHost == "" {
+		http.Error(w, "remoteHost required", http.StatusBadRequest)
+		return
+	}
+
+	protocol := r.FormValue("protocol")
+	if protocol != "udp" && protocol != "tcp" {
+		http.Error(w, "protocol must be udp or tcp", http.StatusBadRequest)
+		return
+	}
+
+	cipher := r.FormValue("cipher")
+	if cipher != "" && !validCiphers[cipher] {
+		http.Error(w, "invalid cipher", http.StatusBadRequest)
+		return
+	}
+
+	auth := r.FormValue("auth")
+	if auth != "" && !validAuths[auth] {
+		http.Error(w, "invalid auth", http.StatusBadRequest)
+		return
+	}
 
 	rawConfig := r.FormValue("configFile")
 	port, err := strconv.Atoi(r.FormValue("remotePort"))
@@ -163,11 +221,11 @@ func (h *OpenVPNHandler) HandleAddOutboundClient(w http.ResponseWriter, r *http.
 	client := config.OVPNClientConfig{
 		Name:       name,
 		ConfigFile: rawConfig,
-		RemoteHost: r.FormValue("remoteHost"),
+		RemoteHost: remoteHost,
 		RemotePort: port,
-		Protocol:   r.FormValue("protocol"),
-		Cipher:     r.FormValue("cipher"),
-		Auth:       r.FormValue("auth"),
+		Protocol:   protocol,
+		Cipher:     cipher,
+		Auth:       auth,
 		TLSAuth:    r.FormValue("tlsAuth") == "true",
 		Username:   r.FormValue("username"),
 		Password:   r.FormValue("password"),
