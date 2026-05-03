@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -28,6 +30,17 @@ func main() {
 			fmt.Fprintf(os.Stderr, "agent error: %v\n", err)
 			os.Exit(1)
 		}
+	case "hash-password":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: home-router hash-password <password>")
+			os.Exit(1)
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(os.Args[2]), bcrypt.DefaultCost)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "hash error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(string(hash))
 	case "version":
 		fmt.Printf("home-router %s (commit: %s, built: %s)\n", version, commit, date)
 	case "help", "-h", "--help":

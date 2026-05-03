@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	crypto_rand "crypto/rand"
 	"flag"
 	"fmt"
 	"log"
@@ -29,6 +30,13 @@ func runServe() error {
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if cfg.System.SessionSecret == "" {
+		b := make([]byte, 32)
+		crypto_rand.Read(b)
+		cfg.System.SessionSecret = fmt.Sprintf("%x", b)
+		log.Println("generated random session secret (not persisted)")
 	}
 
 	loc, err := i18n.New(cfg.System.Language)
