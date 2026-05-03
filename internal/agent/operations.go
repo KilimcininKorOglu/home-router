@@ -1,34 +1,190 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
 )
+
+var allowedCommands = map[string]bool{
+	"nft": true, "ip": true, "tc": true, "sysctl": true,
+	"wg": true, "wg-quick": true, "pppd": true, "pppoe-server": true,
+	"openvpn": true, "systemctl": true, "hostnamectl": true, "timedatectl": true,
+	"unbound-control": true, "chronyc": true, "smbcontrol": true,
+	"mdadm": true, "mkfs.ext4": true, "mount": true, "lsblk": true, "findmnt": true,
+	"smartctl": true, "hdparm": true, "tar": true,
+	"dig": true, "ping": true, "pgrep": true, "pkill": true, "killall": true,
+	"dhclient": true, "chpasswd": true, "bash": true, "df": true, "echo": true,
+}
+
+var allowedWritePaths = []string{
+	"/etc/ppp/",
+	"/etc/openvpn/",
+	"/etc/nftables",
+	"/etc/unbound/",
+	"/etc/dnsmasq",
+	"/etc/wireguard/",
+	"/etc/samba/",
+	"/etc/chrony/",
+	"/etc/rsyslog",
+	"/etc/home-router/",
+	"/var/log/",
+	"/tmp/nftables-",
+	"/tmp/home-router-",
+}
+
+type ExecParams struct {
+	Cmd  string   `json:"cmd"`
+	Args []string `json:"args"`
+}
+
+type ExecResult struct {
+	Stdout   string `json:"stdout"`
+	Stderr   string `json:"stderr"`
+	ExitCode int    `json:"exitCode"`
+}
+
+type FileWriteParams struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+	Mode    int    `json:"mode"`
+	MkdirP  bool   `json:"mkdirp"`
+}
+
+type FileReadParams struct {
+	Path string `json:"path"`
+}
 
 func RegisterBuiltinOps(s *Server) {
 	s.Register("ping", opPing)
-	s.Register("pppoe.connect", opStub("pppoe.connect"))
-	s.Register("pppoe.disconnect", opStub("pppoe.disconnect"))
-	s.Register("pppoe.status", opStub("pppoe.status"))
-	s.Register("pppoe.sniff.start", opStub("pppoe.sniff.start"))
-	s.Register("pppoe.sniff.stop", opStub("pppoe.sniff.stop"))
-	s.Register("network.vlan.create", opStub("network.vlan.create"))
-	s.Register("network.vlan.delete", opStub("network.vlan.delete"))
-	s.Register("usb.activate", opStub("usb.activate"))
-	s.Register("usb.deactivate", opStub("usb.deactivate"))
-	s.Register("usb.status", opStub("usb.status"))
-	s.Register("healthcheck.restart_iface", opStub("healthcheck.restart_iface"))
-	s.Register("healthcheck.restart_pppoe", opStub("healthcheck.restart_pppoe"))
-	s.Register("system.reboot", opStub("system.reboot"))
+	s.Register("exec.run", opExecRun)
+	s.Register("file.write", opFileWrite)
+	s.Register("file.read", opFileRead)
+	s.Register("file.mkdir", opFileMkdir)
 }
 
 func opPing(_ context.Context, _ json.RawMessage) (any, error) {
 	return map[string]string{"status": "pong"}, nil
 }
 
-func opStub(name string) Handler {
-	return func(_ context.Context, _ json.RawMessage) (any, error) {
-		return nil, fmt.Errorf("%s: not yet implemented", name)
+func opExecRun(ctx context.Context, raw json.RawMessage) (any, error) {
+	var params ExecParams
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return nil, fmt.Errorf("invalid params: %w", err)
 	}
+
+	baseName := filepath.Base(params.Cmd)
+	if !allowedCommands[baseName] {
+		return nil, fmt.Errorf("command not allowed: %s", baseName)
+	}
+
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+	}
+
+	cmd := exec.CommandContext(ctx, params.Cmd, params.Args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	result := ExecResult{
+		Stdout: stdout.String(),
+		Stderr: stderr.String(),
+	}
+	if cmd.ProcessState != nil {
+		result.ExitCode = cmd.ProcessState.ExitCode()
+	}
+
+	if err != nil {
+		return result, fmt.Errorf("exec %s: %w (stderr: %s)", baseName, err, stderr.String())
+	}
+
+	return result, nil
+}
+
+func opFileWrite(_ context.Context, raw json.RawMessage) (any, error) {
+	var params FileWriteParams
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return nil, fmt.Errorf("invalid params: %w", err)
+	}
+
+	if !isPathAllowed(params.Path) {
+		return nil, fmt.Errorf("write not allowed to path: %s", params.Path)
+	}
+
+	mode := os.FileMode(params.Mode)
+	if mode == 0 {
+		mode = 0o644
+	}
+
+	if params.MkdirP {
+		os.MkdirAll(filepath.Dir(params.Path), 0o755)
+	}
+
+	if err := os.WriteFile(params.Path, []byte(params.Content), mode); err != nil {
+		return nil, fmt.Errorf("write file: %w", err)
+	}
+
+	return map[string]string{"status": "ok"}, nil
+}
+
+func opFileRead(_ context.Context, raw json.RawMessage) (any, error) {
+	var params FileReadParams
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return nil, fmt.Errorf("invalid params: %w", err)
+	}
+
+	data, err := os.ReadFile(params.Path)
+	if err != nil {
+		return nil, fmt.Errorf("read file: %w", err)
+	}
+
+	return map[string]string{"content": string(data)}, nil
+}
+
+func opFileMkdir(_ context.Context, raw json.RawMessage) (any, error) {
+	var params struct {
+		Path string `json:"path"`
+		Mode int    `json:"mode"`
+	}
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return nil, fmt.Errorf("invalid params: %w", err)
+	}
+
+	if !isPathAllowed(params.Path) {
+		return nil, fmt.Errorf("mkdir not allowed for path: %s", params.Path)
+	}
+
+	mode := os.FileMode(params.Mode)
+	if mode == 0 {
+		mode = 0o755
+	}
+
+	if err := os.MkdirAll(params.Path, mode); err != nil {
+		return nil, fmt.Errorf("mkdir: %w", err)
+	}
+
+	return map[string]string{"status": "ok"}, nil
+}
+
+func isPathAllowed(path string) bool {
+	clean := filepath.Clean(path)
+	if strings.Contains(clean, "..") {
+		return false
+	}
+	for _, prefix := range allowedWritePaths {
+		if strings.HasPrefix(clean, prefix) {
+			return true
+		}
+	}
+	return false
 }

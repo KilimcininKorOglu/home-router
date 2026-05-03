@@ -52,6 +52,12 @@ func (s *Server) Register(method string, handler Handler) {
 	s.handlers[method] = handler
 }
 
+func (s *Server) GetHandler(method string) Handler {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.handlers[method]
+}
+
 func (s *Server) Serve(ctx context.Context) error {
 	if err := os.MkdirAll(filepath.Dir(s.socketPath), 0o755); err != nil {
 		return fmt.Errorf("create socket dir: %w", err)

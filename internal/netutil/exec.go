@@ -3,20 +3,48 @@ package netutil
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 )
 
 const defaultTimeout = 30 * time.Second
 
 type ExecResult struct {
-	Stdout   string
-	Stderr   string
-	ExitCode int
+	Stdout   string `json:"stdout"`
+	Stderr   string `json:"stderr"`
+	ExitCode int    `json:"exitCode"`
+}
+
+type AgentCaller interface {
+	Call(ctx context.Context, method string, params any) (json.RawMessage, error)
+}
+
+var agentClient AgentCaller
+
+func SetAgentClient(c AgentCaller) {
+	agentClient = c
 }
 
 func Run(ctx context.Context, name string, args ...string) (*ExecResult, error) {
+	if agentClient != nil {
+		return runViaAgent(ctx, name, args...)
+	}
+	return RunLocal(ctx, name, args...)
+}
+
+func RunSimple(ctx context.Context, name string, args ...string) (string, error) {
+	result, err := Run(ctx, name, args...)
+	if err != nil {
+		return "", err
+	}
+	return result.Stdout, nil
+}
+
+func RunLocal(ctx context.Context, name string, args ...string) (*ExecResult, error) {
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, defaultTimeout)
@@ -45,10 +73,98 @@ func Run(ctx context.Context, name string, args ...string) (*ExecResult, error) 
 	return result, nil
 }
 
-func RunSimple(ctx context.Context, name string, args ...string) (string, error) {
-	result, err := Run(ctx, name, args...)
+type execParams struct {
+	Cmd  string   `json:"cmd"`
+	Args []string `json:"args"`
+}
+
+func runViaAgent(ctx context.Context, name string, args ...string) (*ExecResult, error) {
+	params := execParams{Cmd: name, Args: args}
+
+	raw, err := agentClient.Call(ctx, "exec.run", params)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("agent exec.run %s: %w", name, err)
 	}
-	return result.Stdout, nil
+
+	var result ExecResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("decode exec result: %w", err)
+	}
+
+	return &result, nil
+}
+
+type fileWriteParams struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+	Mode    int    `json:"mode"`
+	MkdirP  bool   `json:"mkdirp"`
+}
+
+func WriteFile(path string, content []byte, mode os.FileMode) error {
+	if agentClient != nil {
+		params := fileWriteParams{
+			Path:    path,
+			Content: string(content),
+			Mode:    int(mode),
+			MkdirP:  true,
+		}
+		_, err := agentClient.Call(context.Background(), "file.write", params)
+		if err != nil {
+			return fmt.Errorf("agent file.write %s: %w", path, err)
+		}
+		return nil
+	}
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	return os.WriteFile(path, content, mode)
+}
+
+func CreateFile(path string, mode os.FileMode) (*os.File, error) {
+	if agentClient != nil {
+		params := fileWriteParams{
+			Path:   path,
+			Mode:   int(mode),
+			MkdirP: true,
+		}
+		agentClient.Call(context.Background(), "file.mkdir", struct {
+			Path string `json:"path"`
+		}{Path: filepath.Dir(path)})
+		_ = params
+	}
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	return os.Create(path)
+}
+
+func MkdirAll(path string, mode os.FileMode) error {
+	if agentClient != nil {
+		params := struct {
+			Path string `json:"path"`
+			Mode int    `json:"mode"`
+		}{Path: path, Mode: int(mode)}
+		_, err := agentClient.Call(context.Background(), "file.mkdir", params)
+		if err != nil {
+			return fmt.Errorf("agent file.mkdir %s: %w", path, err)
+		}
+		return nil
+	}
+	return os.MkdirAll(path, mode)
+}
+
+func ReadFile(path string) ([]byte, error) {
+	if agentClient != nil {
+		raw, err := agentClient.Call(context.Background(), "file.read", struct {
+			Path string `json:"path"`
+		}{Path: path})
+		if err != nil {
+			return nil, fmt.Errorf("agent file.read %s: %w", path, err)
+		}
+		var result struct {
+			Content string `json:"content"`
+		}
+		if err := json.Unmarshal(raw, &result); err != nil {
+			return nil, fmt.Errorf("decode file.read: %w", err)
+		}
+		return []byte(result.Content), nil
+	}
+	return os.ReadFile(path)
 }

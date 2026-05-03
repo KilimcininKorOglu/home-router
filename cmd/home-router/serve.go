@@ -12,6 +12,7 @@ import (
 	"github.com/KilimcininKorOglu/home-router/internal/agent"
 	"github.com/KilimcininKorOglu/home-router/internal/config"
 	"github.com/KilimcininKorOglu/home-router/internal/i18n"
+	"github.com/KilimcininKorOglu/home-router/internal/netutil"
 	"github.com/KilimcininKorOglu/home-router/internal/web"
 	webFS "github.com/KilimcininKorOglu/home-router/web"
 )
@@ -39,6 +40,7 @@ func runServe() error {
 	}
 
 	agentClient := agent.NewClient(*socketPath)
+	netutil.SetAgentClient(agentClient)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
