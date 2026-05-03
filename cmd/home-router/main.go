@@ -41,6 +41,11 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println(string(hash))
+	case "gen-cert":
+		if err := runGenCert(); err != nil {
+			fmt.Fprintf(os.Stderr, "gen-cert error: %v\n", err)
+			os.Exit(1)
+		}
 	case "version":
 		fmt.Printf("home-router %s (commit: %s, built: %s)\n", version, commit, date)
 	case "help", "-h", "--help":
@@ -59,9 +64,11 @@ Usage:
   home-router <command> [options]
 
 Commands:
-  serve      Start web server (unprivileged)
-  agent      Start privileged agent (root, UDS listener)
-  version    Show version info
-  help       Show this help message
+  serve          Start web server (unprivileged)
+  agent          Start privileged agent (root, UDS listener)
+  hash-password  Print a bcrypt hash for the given password
+  gen-cert       Generate the self-signed TLS cert/key and exit
+  version        Show version info
+  help           Show this help message
 `)
 }
