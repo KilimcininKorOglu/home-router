@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/KilimcininKorOglu/home-router/internal/config"
@@ -20,6 +21,109 @@ type DHCPService struct {
 
 func NewDHCPService(cfg *config.Config) *DHCPService {
 	return &DHCPService{cfg: cfg}
+}
+
+type dnsmasqTemplateData struct {
+	LANDevice      string
+	RangeStart     string
+	RangeEnd       string
+	LeaseTime      string
+	Gateway        string
+	Gateway6       string
+	DNSServer      string
+	Domain         string
+	StaticLeases   []config.StaticLease
+	IPv6Enabled    bool
+	ULAPrefix      string
+	ULARange       string
+	RAInterval     int
+	VLANDHCPRanges []vlanDHCPRange
+}
+
+type vlanDHCPRange struct {
+	Device     string
+	RangeStart string
+	RangeEnd   string
+	LeaseTime  string
+	Gateway    string
+	DNSServer  string
+}
+
+func (s *DHCPService) RenderConfig() error {
+	tmpl, err := template.ParseFiles("configs/sysconf/dnsmasq.conf.tmpl")
+	if err != nil {
+		return fmt.Errorf("parse dnsmasq template: %w", err)
+	}
+
+	var lanDevice string
+	for _, iface := range s.cfg.Interfaces {
+		if iface.Role == "lan" {
+			lanDevice = iface.Device
+			break
+		}
+	}
+
+	data := dnsmasqTemplateData{
+		LANDevice:    lanDevice,
+		RangeStart:   s.cfg.DHCP.RangeStart,
+		RangeEnd:     s.cfg.DHCP.RangeEnd,
+		LeaseTime:    s.cfg.DHCP.LeaseTime,
+		Gateway:      s.cfg.DHCP.Gateway,
+		DNSServer:    s.cfg.DHCP.DNSServer,
+		Domain:       s.cfg.System.Domain,
+		StaticLeases: s.cfg.DHCP.StaticLeases,
+		IPv6Enabled:  s.cfg.IPv6.Enabled != "off",
+		RAInterval:   s.cfg.IPv6.LAN.RAInterval,
+	}
+
+	if data.LeaseTime == "" {
+		data.LeaseTime = "12h"
+	}
+	if data.Gateway == "" {
+		data.Gateway = "10.10.10.1"
+	}
+	if data.DNSServer == "" {
+		data.DNSServer = data.Gateway
+	}
+	if data.Domain == "" {
+		data.Domain = "lan"
+	}
+	if data.RAInterval == 0 {
+		data.RAInterval = 60
+	}
+
+	if s.cfg.IPv6.LAN.ULA.Enabled {
+		data.ULAPrefix = s.cfg.IPv6.LAN.ULA.Prefix
+	}
+
+	for _, vlan := range s.cfg.VLANs {
+		if vlan.DHCP.Enabled && vlan.Address != "" {
+			var parentDev string
+			for _, iface := range s.cfg.Interfaces {
+				if iface.ID == vlan.Parent {
+					parentDev = iface.Device
+					break
+				}
+			}
+			if parentDev != "" {
+				data.VLANDHCPRanges = append(data.VLANDHCPRanges, vlanDHCPRange{
+					Device:    fmt.Sprintf("%s.%d", parentDev, vlan.VID),
+					Gateway:   subnetFromCIDR(vlan.Address),
+					DNSServer: subnetFromCIDR(vlan.Address),
+					LeaseTime: data.LeaseTime,
+				})
+			}
+		}
+	}
+
+	os.MkdirAll("/etc", 0o755)
+	f, err := os.Create("/etc/dnsmasq.conf")
+	if err != nil {
+		return fmt.Errorf("create dnsmasq.conf: %w", err)
+	}
+	defer f.Close()
+
+	return tmpl.Execute(f, data)
 }
 
 type Lease struct {

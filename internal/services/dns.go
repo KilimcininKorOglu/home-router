@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/KilimcininKorOglu/home-router/internal/config"
@@ -62,6 +63,63 @@ func NewDNSService(cfg *config.Config) *DNSService {
 		queryBuf: make([]QueryLogEntry, 0, bufSize),
 		bufSize:  bufSize,
 	}
+}
+
+type unboundTemplateData struct {
+	IPv6Enabled    bool
+	AllowSubnets   []string
+	ULAPrefix      string
+	CacheSize      int
+	QueryLogEnabled bool
+	QueryLogPath   string
+	EnableDoT      bool
+	DoTUpstream    string
+}
+
+func (s *DNSService) RenderConfig() error {
+	funcMap := template.FuncMap{
+		"mul": func(a, b int) int { return a * b },
+	}
+
+	tmpl, err := template.New("unbound.conf.tmpl").Funcs(funcMap).ParseFiles("configs/sysconf/unbound.conf.tmpl")
+	if err != nil {
+		return fmt.Errorf("parse unbound template: %w", err)
+	}
+
+	data := unboundTemplateData{
+		IPv6Enabled:     s.cfg.IPv6.Enabled != "off",
+		CacheSize:       s.cfg.DNS.CacheSize,
+		QueryLogEnabled: s.cfg.DNS.QueryLog.Enabled,
+		QueryLogPath:    s.cfg.DNS.QueryLog.LogPath,
+		EnableDoT:       s.cfg.DNS.EnableDoT,
+		DoTUpstream:     s.cfg.DNS.DoTUpstream,
+		ULAPrefix:       s.cfg.IPv6.LAN.ULA.Prefix,
+	}
+
+	if data.QueryLogPath == "" {
+		data.QueryLogPath = "/var/log/unbound-query.log"
+	}
+
+	if data.CacheSize == 0 {
+		data.CacheSize = 64
+	}
+
+	for _, vlan := range s.cfg.VLANs {
+		for _, iface := range s.cfg.Interfaces {
+			if iface.ID == vlan.Parent && iface.Address != "" {
+				data.AllowSubnets = append(data.AllowSubnets, subnetFromCIDR(iface.Address)+"/24")
+			}
+		}
+	}
+
+	os.MkdirAll("/etc/unbound", 0o755)
+	f, err := os.Create("/etc/unbound/unbound.conf")
+	if err != nil {
+		return fmt.Errorf("create unbound.conf: %w", err)
+	}
+	defer f.Close()
+
+	return tmpl.Execute(f, data)
 }
 
 func (s *DNSService) Reload(ctx context.Context) error {
