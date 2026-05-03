@@ -77,6 +77,36 @@ var allowedReadRules = []pathRule{
 	{"/tmp/home-router-", filenamePrefix},
 }
 
+func init() {
+	allowedWriteRules = resolveRulePatterns(allowedWriteRules)
+	allowedReadRules = resolveRulePatterns(allowedReadRules)
+}
+
+func resolveRulePatterns(rules []pathRule) []pathRule {
+	resolved := make([]pathRule, len(rules))
+	for i, r := range rules {
+		resolved[i] = r
+		switch r.kind {
+		case dirPrefix:
+			dir := strings.TrimSuffix(r.pattern, "/")
+			if real, err := filepath.EvalSymlinks(dir); err == nil && real != dir {
+				resolved[i].pattern = real + "/"
+			}
+		case exactFile:
+			if real, err := filepath.EvalSymlinks(r.pattern); err == nil {
+				resolved[i].pattern = real
+			}
+		case filenamePrefix:
+			dir := filepath.Dir(r.pattern)
+			base := filepath.Base(r.pattern)
+			if real, err := filepath.EvalSymlinks(dir); err == nil && real != dir {
+				resolved[i].pattern = filepath.Join(real, base)
+			}
+		}
+	}
+	return resolved
+}
+
 type ExecParams struct {
 	Cmd   string   `json:"cmd"`
 	Args  []string `json:"args"`
@@ -229,6 +259,14 @@ func opFileMkdir(_ context.Context, raw json.RawMessage) (any, error) {
 
 func checkPathRules(path string, rules []pathRule) bool {
 	clean := filepath.Clean(path)
+	if resolved, err := filepath.EvalSymlinks(clean); err == nil {
+		clean = resolved
+	} else {
+		dir := filepath.Dir(clean)
+		if resolvedDir, err := filepath.EvalSymlinks(dir); err == nil {
+			clean = filepath.Join(resolvedDir, filepath.Base(clean))
+		}
+	}
 	for _, r := range rules {
 		switch r.kind {
 		case dirPrefix:
