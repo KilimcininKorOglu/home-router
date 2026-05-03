@@ -59,6 +59,10 @@ func (h *SyslogHandler) HandleSaveServerConfig(w http.ResponseWriter, r *http.Re
 		Enabled:      r.FormValue("enabled") == "on",
 		ListenUDP:    strings.TrimSpace(r.FormValue("listen_udp")),
 		ListenTCP:    strings.TrimSpace(r.FormValue("listen_tcp")),
+		EnableTLS:    r.FormValue("enable_tls") == "on",
+		TLSCertFile:  strings.TrimSpace(r.FormValue("tls_cert_file")),
+		TLSKeyFile:   strings.TrimSpace(r.FormValue("tls_key_file")),
+		TLSCAFile:    strings.TrimSpace(r.FormValue("tls_ca_file")),
 		LogPath:      strings.TrimSpace(r.FormValue("log_path")),
 		PerHostDirs:  r.FormValue("per_host_dirs") == "on",
 		MaxRetention: strings.TrimSpace(r.FormValue("max_retention")),
@@ -83,6 +87,8 @@ func (h *SyslogHandler) HandleSaveClientConfig(w http.ResponseWriter, r *http.Re
 		proto = "udp"
 	}
 	current.Protocol = proto
+	current.EnableTLS = r.FormValue("enable_tls") == "on"
+	current.TLSCAFile = strings.TrimSpace(r.FormValue("tls_ca_file"))
 	if err := h.syslog.SaveClientConfig(current); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

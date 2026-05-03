@@ -15,6 +15,14 @@
             <option value="tcp" {{ if eq .Config.Client.Protocol "tcp" }}selected{{ end }}>TCP</option>
         </select>
     </label>
+    <label style="display:flex; gap:var(--space-xs);">
+        <input type="checkbox" name="enable_tls" {{ if .Config.Client.EnableTLS }}checked{{ end }}>
+        <span>{{ t $.Lang "syslog.enableTLS" }}</span>
+    </label>
+    <label>
+        <div class="input-label">{{ t $.Lang "syslog.tlsCA" }}</div>
+        <input class="input" name="tls_ca_file" value="{{ .Config.Client.TLSCAFile }}" placeholder="/etc/ssl/certs/ca-certificates.crt">
+    </label>
     <button class="btn btn-primary btn-sm" type="submit">{{ t $.Lang "common.save" }}</button>
 </form>
 

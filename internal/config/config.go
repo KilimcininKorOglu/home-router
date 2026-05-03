@@ -451,6 +451,9 @@ type SyslogServerConfig struct {
 	ListenUDP    string `yaml:"listenUDP"`
 	ListenTCP    string `yaml:"listenTCP"`
 	EnableTLS    bool   `yaml:"enableTLS"`
+	TLSCertFile  string `yaml:"tlsCertFile,omitempty"`
+	TLSKeyFile   string `yaml:"tlsKeyFile,omitempty"`
+	TLSCAFile    string `yaml:"tlsCAFile,omitempty"`
 	LogPath      string `yaml:"logPath"`
 	PerHostDirs  bool   `yaml:"perHostDirs"`
 	MaxRetention string `yaml:"maxRetention"`
@@ -461,6 +464,7 @@ type SyslogClientConfig struct {
 	RemoteHost string   `yaml:"remoteHost"`
 	Protocol   string   `yaml:"protocol"`
 	EnableTLS  bool     `yaml:"enableTLS"`
+	TLSCAFile  string   `yaml:"tlsCAFile,omitempty"`
 	Facilities []string `yaml:"facilities"`
 }
 

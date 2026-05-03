@@ -217,6 +217,10 @@
     "syslog.facilityExample": "auth, daemon, kern, local0, ...",
     "syslog.noRemoteHosts": "Henüz uzak host yok",
     "syslog.noLogs": "Görüntülenecek log yok",
+    "syslog.enableTLS": "TLS'i etkinleştir (RFC 5425)",
+    "syslog.tlsCert": "TLS Sertifika Dosyası",
+    "syslog.tlsKey": "TLS Anahtar Dosyası",
+    "syslog.tlsCA": "TLS CA Sertifika Dosyası",
 
     "ntp.title": "NTP Zaman Sunucusu",
     "ntp.server": "Sunucu",

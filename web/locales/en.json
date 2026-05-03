@@ -217,6 +217,10 @@
     "syslog.facilityExample": "auth, daemon, kern, local0, ...",
     "syslog.noRemoteHosts": "No remote hosts yet",
     "syslog.noLogs": "No logs to display",
+    "syslog.enableTLS": "Enable TLS (RFC 5425)",
+    "syslog.tlsCert": "TLS Certificate File",
+    "syslog.tlsKey": "TLS Key File",
+    "syslog.tlsCA": "TLS CA Certificate File",
 
     "ntp.title": "NTP Time Server",
     "ntp.server": "Server",

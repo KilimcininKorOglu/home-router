@@ -24,6 +24,22 @@
         <input type="checkbox" name="per_host_dirs" {{ if .Config.Server.PerHostDirs }}checked{{ end }}>
         <span>{{ t $.Lang "syslog.perHostDirs" }}</span>
     </label>
+    <label style="display:flex; gap:var(--space-xs);">
+        <input type="checkbox" name="enable_tls" {{ if .Config.Server.EnableTLS }}checked{{ end }}>
+        <span>{{ t $.Lang "syslog.enableTLS" }}</span>
+    </label>
+    <label>
+        <div class="input-label">{{ t $.Lang "syslog.tlsCert" }}</div>
+        <input class="input" name="tls_cert_file" value="{{ .Config.Server.TLSCertFile }}" placeholder="/etc/rsyslog.d/server.crt">
+    </label>
+    <label>
+        <div class="input-label">{{ t $.Lang "syslog.tlsKey" }}</div>
+        <input class="input" name="tls_key_file" value="{{ .Config.Server.TLSKeyFile }}" placeholder="/etc/rsyslog.d/server.key">
+    </label>
+    <label>
+        <div class="input-label">{{ t $.Lang "syslog.tlsCA" }}</div>
+        <input class="input" name="tls_ca_file" value="{{ .Config.Server.TLSCAFile }}" placeholder="/etc/ssl/certs/ca-certificates.crt">
+    </label>
     <button class="btn btn-primary btn-sm" type="submit">{{ t $.Lang "common.save" }}</button>
 </form>
 {{ end }}
