@@ -42,6 +42,7 @@ type Server struct {
 	health    *handlers.HealthCheckHandler
 	sse       *SSEBroker
 	monitor   *services.MonitorService
+	dhcpSvc   *services.DHCPService
 }
 
 func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *services.UpdateService) (*Server, error) {
@@ -118,6 +119,7 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 		firewall:  firewallHandler,
 		dns:       dnsHandler,
 		dhcp:      dhcpHandler,
+		dhcpSvc:   dhcpSvc,
 		dashboard: dashboardHandler,
 		settings:  settingsHandler,
 		qos:       qosHandler,
@@ -208,6 +210,17 @@ func (s *Server) Serve(ctx context.Context) error {
 	}
 	if keyFile == "" {
 		keyFile = "/var/lib/home-router/tls/server.key"
+	}
+
+	// Retro-mirror DHCP static leases to DNS so hosts added in older
+	// versions (or via direct router.yaml edits) become resolvable on
+	// every restart. Idempotent — Sync rebuilds the dhcp-static set.
+	if s.dhcpSvc != nil {
+		if err := s.dhcpSvc.SyncStaticDNSRecords(ctx); err != nil {
+			log.Printf("startup: dhcp dns sync failed: %v", err)
+		} else {
+			log.Printf("startup: dhcp static lease DNS records synced")
+		}
 	}
 
 	err = s.http.ListenAndServeTLS(certFile, keyFile)
