@@ -2,6 +2,7 @@ package services_test
 
 import (
 	"context"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -38,6 +39,10 @@ func TestHealthCheckGetResultNotFound(t *testing.T) {
 }
 
 func TestHealthCheckStartStop(t *testing.T) {
+	if _, err := exec.LookPath("ping"); err != nil {
+		t.Skip("ping not available in this environment")
+	}
+
 	cfg := &config.Config{}
 	cfg.HealthCheck.Enabled = true
 	cfg.HealthCheck.Checks = []config.HealthCheckEntry{

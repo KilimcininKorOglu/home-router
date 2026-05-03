@@ -26,7 +26,12 @@ func TestServerClientRoundTrip(t *testing.T) {
 		errCh <- srv.Serve(ctx)
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	for i := 0; i < 100; i++ {
+		if _, err := os.Stat(sock); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	client := agent.NewClient(sock)
 	defer client.Close()
@@ -68,7 +73,12 @@ func TestMethodNotFound(t *testing.T) {
 	defer cancel()
 
 	go srv.Serve(ctx)
-	time.Sleep(50 * time.Millisecond)
+	for i := 0; i < 100; i++ {
+		if _, err := os.Stat(sock); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	client := agent.NewClient(sock)
 	defer client.Close()
@@ -87,14 +97,24 @@ func TestSocketCleanup(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go srv.Serve(ctx)
-	time.Sleep(50 * time.Millisecond)
+	for i := 0; i < 100; i++ {
+		if _, err := os.Stat(sock); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	if _, err := os.Stat(sock); os.IsNotExist(err) {
 		t.Fatal("socket file should exist while server is running")
 	}
 
 	cancel()
-	time.Sleep(50 * time.Millisecond)
+	for i := 0; i < 100; i++ {
+		if _, err := os.Stat(sock); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	srv.Close()
 
 	if _, err := os.Stat(sock); !os.IsNotExist(err) {
