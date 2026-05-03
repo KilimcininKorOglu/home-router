@@ -32,9 +32,109 @@
     {{ template "ntp_status" . }}
 
     <button class="btn btn-primary" hx-post="/ntp/force-sync" hx-swap="none" style="margin-top:var(--space-lg);">
-        {{ t $.Lang "common.apply" }}
+        {{ t $.Lang "ntp.forceSync" }}
     </button>
     {{ end }}
+
+    <!-- NTP Sources -->
+    <div class="card" style="margin-top:var(--space-lg);">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "ntp.clientSources" }}</span>
+            <button class="btn btn-primary btn-sm" type="button"
+                onclick="document.getElementById('ntp-source-form').style.display='block'">
+                {{ t $.Lang "ntp.addSource" }}
+            </button>
+        </div>
+        <form id="ntp-source-form" style="display:none; margin-bottom:var(--space-md);"
+              hx-post="/ntp/sources" hx-swap="none"
+              hx-on::after-request="this.reset(); this.style.display='none';">
+            <div style="display:grid; grid-template-columns:1fr auto; gap:var(--space-sm);">
+                <input class="input" name="host" placeholder="{{ t $.Lang "ntp.sourceExample" }}" required>
+                <button class="btn btn-primary btn-sm" type="submit">{{ t $.Lang "common.add" }}</button>
+            </div>
+        </form>
+        {{ if .Config.Client.Sources }}
+        <table style="width:100%; font-size:var(--font-sm);">
+            {{ range $idx, $src := .Config.Client.Sources }}
+            <tr style="border-bottom:1px solid var(--border-color);">
+                <td style="padding:var(--space-xs); font-family:var(--font-mono);">{{ $src }}</td>
+                <td style="padding:var(--space-xs); text-align:right; width:80px;">
+                    <button class="btn btn-danger btn-sm"
+                            hx-delete="/ntp/sources/{{ $idx }}" hx-swap="none"
+                            hx-confirm="{{ t $.Lang "common.confirm" }}">
+                        {{ t $.Lang "common.delete" }}
+                    </button>
+                </td>
+            </tr>
+            {{ end }}
+        </table>
+        {{ else }}
+        <div style="color:var(--text-secondary); font-size:var(--font-sm); padding:var(--space-md);">
+            {{ t $.Lang "ntp.noSources" }}
+        </div>
+        {{ end }}
+    </div>
+
+    <!-- NTP Allow Subnets -->
+    <div class="card" style="margin-top:var(--space-lg);">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "ntp.allowSubnets" }}</span>
+            <button class="btn btn-primary btn-sm" type="button"
+                onclick="document.getElementById('ntp-allow-form').style.display='block'">
+                {{ t $.Lang "ntp.addSubnet" }}
+            </button>
+        </div>
+        <form id="ntp-allow-form" style="display:none; margin-bottom:var(--space-md);"
+              hx-post="/ntp/allow" hx-swap="none"
+              hx-on::after-request="this.reset(); this.style.display='none';">
+            <div style="display:grid; grid-template-columns:1fr auto; gap:var(--space-sm);">
+                <input class="input" name="cidr" placeholder="{{ t $.Lang "ntp.subnetExample" }}" required>
+                <button class="btn btn-primary btn-sm" type="submit">{{ t $.Lang "common.add" }}</button>
+            </div>
+        </form>
+        {{ if .Config.AllowSubnets }}
+        <table style="width:100%; font-size:var(--font-sm);">
+            {{ range $idx, $sub := .Config.AllowSubnets }}
+            <tr style="border-bottom:1px solid var(--border-color);">
+                <td style="padding:var(--space-xs); font-family:var(--font-mono);">{{ $sub }}</td>
+                <td style="padding:var(--space-xs); text-align:right; width:80px;">
+                    <button class="btn btn-danger btn-sm"
+                            hx-delete="/ntp/allow/{{ $idx }}" hx-swap="none"
+                            hx-confirm="{{ t $.Lang "common.confirm" }}">
+                        {{ t $.Lang "common.delete" }}
+                    </button>
+                </td>
+            </tr>
+            {{ end }}
+        </table>
+        {{ else }}
+        <div style="color:var(--text-secondary); font-size:var(--font-sm); padding:var(--space-md);">
+            {{ t $.Lang "ntp.noSubnets" }}
+        </div>
+        {{ end }}
+    </div>
+
+    <!-- NTP Settings -->
+    <div class="card" style="margin-top:var(--space-lg);">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "ntp.settings" }}</span>
+        </div>
+        <form hx-post="/ntp/settings" hx-swap="none" style="display:flex; flex-direction:column; gap:var(--space-md);">
+            <label>
+                <div class="input-label">{{ t $.Lang "ntp.fallback" }}</div>
+                <input class="input" name="fallback" value="{{ .Config.Client.Fallback }}" placeholder="time.cloudflare.com">
+            </label>
+            <label style="display:flex; gap:var(--space-xs);">
+                <input type="checkbox" name="server_enabled" {{ if .Config.Server.Enabled }}checked{{ end }}>
+                <span>{{ t $.Lang "ntp.serverEnabled" }}</span>
+            </label>
+            <label style="display:flex; gap:var(--space-xs);">
+                <input type="checkbox" name="rtc_sync" {{ if .Config.RTCSync }}checked{{ end }}>
+                <span>{{ t $.Lang "ntp.rtcSync" }}</span>
+            </label>
+            <button class="btn btn-primary btn-sm" type="submit">{{ t $.Lang "common.save" }}</button>
+        </form>
+    </div>
 
     {{ end }}
 </div>

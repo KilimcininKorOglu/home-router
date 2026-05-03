@@ -304,6 +304,11 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 	mux.Handle("GET /syslog", authed(http.HandlerFunc(s.syslogh.HandlePage)))
 	mux.Handle("GET /ntp", authed(http.HandlerFunc(s.ntph.HandlePage)))
 	mux.Handle("POST /ntp/force-sync", authed(http.HandlerFunc(s.ntph.HandleForceSync)))
+	mux.Handle("POST /ntp/sources", authed(http.HandlerFunc(s.ntph.HandleAddSource)))
+	mux.Handle("DELETE /ntp/sources/{index}", authed(http.HandlerFunc(s.ntph.HandleRemoveSource)))
+	mux.Handle("POST /ntp/allow", authed(http.HandlerFunc(s.ntph.HandleAddAllowSubnet)))
+	mux.Handle("DELETE /ntp/allow/{index}", authed(http.HandlerFunc(s.ntph.HandleRemoveAllowSubnet)))
+	mux.Handle("POST /ntp/settings", authed(http.HandlerFunc(s.ntph.HandleSaveSettings)))
 }
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {

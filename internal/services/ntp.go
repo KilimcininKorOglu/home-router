@@ -147,3 +147,70 @@ func (s *NTPService) Reload(ctx context.Context) error {
 	_, err := netutil.Run(ctx, "systemctl", "reload", "chronyd")
 	return err
 }
+
+// GetConfig returns the live NTP configuration block.
+func (s *NTPService) GetConfig() config.NTPConfig {
+	return s.cfg.NTP
+}
+
+// AddSource appends a NTP server hostname to the client source list.
+func (s *NTPService) AddSource(host string) error {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return fmt.Errorf("empty source")
+	}
+	for _, src := range s.cfg.NTP.Client.Sources {
+		if strings.EqualFold(src, host) {
+			return fmt.Errorf("source %s already exists", host)
+		}
+	}
+	s.cfg.NTP.Client.Sources = append(s.cfg.NTP.Client.Sources, host)
+	return s.cfg.SaveToFile()
+}
+
+// RemoveSource deletes the source at the given index.
+func (s *NTPService) RemoveSource(index int) error {
+	if index < 0 || index >= len(s.cfg.NTP.Client.Sources) {
+		return fmt.Errorf("invalid source index: %d", index)
+	}
+	s.cfg.NTP.Client.Sources = append(
+		s.cfg.NTP.Client.Sources[:index],
+		s.cfg.NTP.Client.Sources[index+1:]...,
+	)
+	return s.cfg.SaveToFile()
+}
+
+// AddAllowSubnet appends a CIDR to the chrony "allow" list.
+func (s *NTPService) AddAllowSubnet(cidr string) error {
+	cidr = strings.TrimSpace(cidr)
+	if cidr == "" {
+		return fmt.Errorf("empty subnet")
+	}
+	for _, sub := range s.cfg.NTP.AllowSubnets {
+		if sub == cidr {
+			return fmt.Errorf("subnet %s already in allow list", cidr)
+		}
+	}
+	s.cfg.NTP.AllowSubnets = append(s.cfg.NTP.AllowSubnets, cidr)
+	return s.cfg.SaveToFile()
+}
+
+// RemoveAllowSubnet deletes the subnet at the given index.
+func (s *NTPService) RemoveAllowSubnet(index int) error {
+	if index < 0 || index >= len(s.cfg.NTP.AllowSubnets) {
+		return fmt.Errorf("invalid subnet index: %d", index)
+	}
+	s.cfg.NTP.AllowSubnets = append(
+		s.cfg.NTP.AllowSubnets[:index],
+		s.cfg.NTP.AllowSubnets[index+1:]...,
+	)
+	return s.cfg.SaveToFile()
+}
+
+// SaveSettings updates scalar NTP fields.
+func (s *NTPService) SaveSettings(fallback string, serverEnabled, rtcSync bool) error {
+	s.cfg.NTP.Client.Fallback = strings.TrimSpace(fallback)
+	s.cfg.NTP.Server.Enabled = serverEnabled
+	s.cfg.NTP.RTCSync = rtcSync
+	return s.cfg.SaveToFile()
+}
