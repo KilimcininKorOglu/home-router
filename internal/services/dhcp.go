@@ -33,10 +33,6 @@ func (s *DHCPService) SetDNSService(dns *DNSService) {
 	s.dns = dns
 }
 
-// dnsMirrorSource is the StaticDNSRecord.Source tag for records that
-// were auto-created from a DHCP static lease.
-const dnsMirrorSource = "dhcp-static"
-
 // staticLeaseFQDN builds the FQDN for a hostname using the configured
 // system domain (default "lan").
 func (s *DHCPService) staticLeaseFQDN(hostname string) string {
@@ -296,7 +292,7 @@ func (s *DHCPService) AddStaticLease(mac, ip, hostname string) error {
 		err := s.dns.AddStaticRecord(config.StaticDNSRecord{
 			Name:   fqdn,
 			IP:     ip,
-			Source: dnsMirrorSource,
+			Source: config.DNSSourceDHCPStatic,
 		})
 		if err != nil {
 			log.Printf("dhcp: dns mirror add %s: %v", fqdn, err)
@@ -322,7 +318,7 @@ func (s *DHCPService) RemoveStaticLease(index int) error {
 	// Source filter on FindStaticRecordIndexBySource.
 	if s.dns != nil && removed.Hostname != "" {
 		fqdn := s.staticLeaseFQDN(removed.Hostname)
-		if idx := s.dns.FindStaticRecordIndexBySource(dnsMirrorSource, fqdn); idx >= 0 {
+		if idx := s.dns.FindStaticRecordIndexBySource(config.DNSSourceDHCPStatic, fqdn); idx >= 0 {
 			if err := s.dns.RemoveStaticRecord(idx); err != nil {
 				log.Printf("dhcp: dns mirror remove %s: %v", fqdn, err)
 			}
@@ -344,7 +340,7 @@ func (s *DHCPService) SyncStaticDNSRecords(ctx context.Context) error {
 		all := s.dns.GetStaticRecords()
 		idx := -1
 		for i, r := range all {
-			if r.Source == dnsMirrorSource {
+			if r.Source == config.DNSSourceDHCPStatic {
 				idx = i
 				break
 			}
@@ -365,7 +361,7 @@ func (s *DHCPService) SyncStaticDNSRecords(ctx context.Context) error {
 		err := s.dns.AddStaticRecord(config.StaticDNSRecord{
 			Name:   fqdn,
 			IP:     lease.IP,
-			Source: dnsMirrorSource,
+			Source: config.DNSSourceDHCPStatic,
 		})
 		if err != nil {
 			log.Printf("dhcp: dns sync add %s: %v", fqdn, err)

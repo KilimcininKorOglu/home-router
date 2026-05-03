@@ -99,7 +99,12 @@ func (h *DNSHandler) HandleAddRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rec := config.StaticDNSRecord{Name: name, IP: ip, LocalZone: localZone}
+	rec := config.StaticDNSRecord{
+		Name:      name,
+		IP:        ip,
+		LocalZone: localZone,
+		Source:    config.DNSSourceUser,
+	}
 	if err := h.dns.AddStaticRecord(rec); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

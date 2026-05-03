@@ -238,11 +238,20 @@ type StaticDNSRecord struct {
 	// so split-DNS works: queries under this name fall through to upstream
 	// when no local-data matches.
 	LocalZone bool `yaml:"localZone,omitempty"`
-	// Source tags the origin of the record. "" = user-added (UI),
-	// "dhcp-static" = mirrored from a DHCP static lease. Used to scope
-	// automated cleanup so user records are never deleted by mistake.
+	// Source tags the origin of the record. See DNSSource* constants.
+	// "" loaded from legacy YAML is normalized to DNSSourceUser at Load.
 	Source string `yaml:"source,omitempty"`
 }
+
+// DNS record source identifiers. Used by services to scope cleanup so
+// automated mirrors never delete user-added records (and vice-versa).
+const (
+	// DNSSourceUser is set on records added by the operator via the web UI.
+	DNSSourceUser = "user"
+	// DNSSourceDHCPStatic is set on records mirrored from a DHCP static
+	// lease (one entry per StaticLease with non-empty hostname).
+	DNSSourceDHCPStatic = "dhcp-static"
+)
 
 type QueryLogConfig struct {
 	Enabled    bool   `yaml:"enabled"`
@@ -498,6 +507,17 @@ func Load(path string) (*Config, error) {
 	cfg := &Config{}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
+	}
+
+	// Migration: legacy YAML files have Static DNS records without an
+	// explicit Source. By convention "" was treated as user-added; make
+	// that explicit in memory so downstream code can rely on a non-empty
+	// Source. The first SaveToFile after any mutation persists the new
+	// value to disk.
+	for i := range cfg.DNS.StaticRecords {
+		if cfg.DNS.StaticRecords[i].Source == "" {
+			cfg.DNS.StaticRecords[i].Source = DNSSourceUser
+		}
 	}
 
 	cfg.filePath = path
