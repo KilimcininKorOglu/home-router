@@ -12,6 +12,19 @@ import (
 	"github.com/KilimcininKorOglu/home-router/internal/agent"
 )
 
+func waitForSocket(t *testing.T, sock string) {
+	t.Helper()
+	for i := 0; i < 200; i++ {
+		conn, err := net.DialTimeout("unix", sock, 50*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("socket %s never became ready after 2s", sock)
+}
+
 func TestServerClientRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	sock := filepath.Join(dir, "test.sock")
@@ -27,14 +40,7 @@ func TestServerClientRoundTrip(t *testing.T) {
 		errCh <- srv.Serve(ctx)
 	}()
 
-	for i := 0; i < 100; i++ {
-		conn, err := net.DialTimeout("unix", sock, 50*time.Millisecond)
-		if err == nil {
-			conn.Close()
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForSocket(t, sock)
 
 	client := agent.NewClient(sock)
 	defer client.Close()
@@ -76,14 +82,7 @@ func TestMethodNotFound(t *testing.T) {
 	defer cancel()
 
 	go srv.Serve(ctx)
-	for i := 0; i < 100; i++ {
-		conn, err := net.DialTimeout("unix", sock, 50*time.Millisecond)
-		if err == nil {
-			conn.Close()
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForSocket(t, sock)
 
 	client := agent.NewClient(sock)
 	defer client.Close()
@@ -102,14 +101,7 @@ func TestSocketCleanup(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go srv.Serve(ctx)
-	for i := 0; i < 100; i++ {
-		conn, err := net.DialTimeout("unix", sock, 50*time.Millisecond)
-		if err == nil {
-			conn.Close()
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForSocket(t, sock)
 
 	if _, err := os.Stat(sock); os.IsNotExist(err) {
 		t.Fatal("socket file should exist while server is running")

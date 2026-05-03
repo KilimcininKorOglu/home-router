@@ -43,8 +43,12 @@ func TestHealthCheckGetResultNotFound(t *testing.T) {
 }
 
 func TestHealthCheckStartStop(t *testing.T) {
-	if _, err := exec.LookPath("ping"); err != nil {
-		t.Skip("ping not available in this environment")
+	pingPath, err := exec.LookPath("ping")
+	if err != nil {
+		t.Skip("ping binary not found")
+	}
+	if out, err := exec.Command(pingPath, "-c", "1", "-W", "3", "127.0.0.1").CombinedOutput(); err != nil {
+		t.Skipf("ping 127.0.0.1 not functional in this environment: %s", out)
 	}
 
 	cfg := &config.Config{}
