@@ -221,7 +221,7 @@ fi
 
 echo "[6/7] Updating isolinux config..."
 if [[ -f "$BUILD_DIR/iso/isolinux/txt.cfg" ]]; then
-    INSTALLER_PARAMS='priority=high locale?=en_US.UTF-8 keymap?=tr preseed/file=/cdrom/preseed.cfg'
+    INSTALLER_PARAMS='priority=high locale?=en_US.UTF-8 keymap?=tr time/zone=Europe/Istanbul preseed/file=/cdrom/preseed.cfg'
     sed -i "s|append |append $INSTALLER_PARAMS |" "$BUILD_DIR/iso/isolinux/txt.cfg"
 fi
 
