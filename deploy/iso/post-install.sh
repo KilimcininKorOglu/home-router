@@ -32,6 +32,19 @@ if [[ -d /tmp/pool-extra ]] && [[ -f /tmp/pool-extra/Packages ]]; then
     echo "# Home Router offline install: no network mirror configured." > /etc/apt/sources.list
 fi
 
+# Set timezone chosen in the installer. This avoids depending on d-i's
+# time/zone template availability during CD preseed loading.
+if [[ -s /tmp/timezone.txt ]]; then
+    ROUTER_TZ=$(cat /tmp/timezone.txt)
+    if [[ -f "/usr/share/zoneinfo/$ROUTER_TZ" ]]; then
+        echo "$ROUTER_TZ" > /etc/timezone
+        ln -sf "/usr/share/zoneinfo/$ROUTER_TZ" /etc/localtime
+    else
+        echo "HATA / ERROR: Geçersiz saat dilimi / invalid timezone: $ROUTER_TZ" >&2
+        exit 1
+    fi
+fi
+
 # d-i creates the homerouter user via passwd/make-user=true. If for some
 # reason the user is missing here, abort — installing the service with no
 # owner is worse than failing loudly.
