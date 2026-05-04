@@ -15,17 +15,21 @@ SERVICE_USER="homerouter"
 
 echo "=== Home Router Kurulum Sonrası / Post-Install ==="
 
-# Install packages from local ISO repo
-if [[ -d /cdrom/pool/extra ]] && [[ -f /cdrom/pool/extra/Packages ]]; then
-    echo "deb [trusted=yes] file:///cdrom/pool extra/" > /etc/apt/sources.list.d/home-router-local.list
-    apt-get update -qq || true
+# Install packages from the local ISO repo copied by late_command. Keep apt
+# pointed only at this flat repo so an offline router install never prompts
+# for a Debian CD label or network mirror.
+if [[ -d /tmp/pool-extra ]] && [[ -f /tmp/pool-extra/Packages ]]; then
+    cp /etc/apt/sources.list /etc/apt/sources.list.home-router.bak 2>/dev/null || true
+    mkdir -p /etc/apt/sources.list.d
+    rm -f /etc/apt/sources.list.d/*.list
+    echo "deb [trusted=yes] file:/tmp/pool-extra ./" > /etc/apt/sources.list
+    apt-get update -qq
     apt-get install -y -qq \
         ppp pppoe nftables wireguard-tools openvpn easy-rsa \
         samba samba-common-bin smartmontools mdadm iproute2 \
         unbound dnsmasq rsyslog chrony qrencode \
-        wide-dhcpv6-client curl jq hdparm \
-        || echo "UYARI / WARN: Bazı paketler kurulamadı / Some packages may not have installed"
-    rm -f /etc/apt/sources.list.d/home-router-local.list
+        wide-dhcpv6-client curl jq hdparm openssh-server
+    echo "# Home Router offline install: no network mirror configured." > /etc/apt/sources.list
 fi
 
 # d-i creates the homerouter user via passwd/make-user=true. If for some

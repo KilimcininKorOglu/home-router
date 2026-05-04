@@ -40,7 +40,7 @@ PACKAGES=(
     ppp pppoe nftables wireguard-tools openvpn easy-rsa
     samba samba-common-bin smartmontools mdadm iproute2
     unbound dnsmasq rsyslog chrony qrencode
-    wide-dhcpv6-client curl jq hdparm
+    wide-dhcpv6-client curl jq hdparm openssh-server
 )
 
 echo "=== Building Home Router Installer ISO ==="
@@ -77,9 +77,9 @@ echo "  Downloaded $(ls -1 *.deb 2>/dev/null | wc -l) .deb files"
 popd >/dev/null
 
 echo "[3/7] Creating local package repository..."
-pushd "$BUILD_DIR/iso" >/dev/null
-dpkg-scanpackages pool/extra /dev/null 2>/dev/null | gzip > pool/extra/Packages.gz
-dpkg-scanpackages pool/extra /dev/null 2>/dev/null > pool/extra/Packages
+pushd "$BUILD_DIR/iso/pool/extra" >/dev/null
+dpkg-scanpackages . /dev/null 2>/dev/null | gzip > Packages.gz
+dpkg-scanpackages . /dev/null 2>/dev/null > Packages
 popd >/dev/null
 
 echo "[4/7] Adding home-router files..."
@@ -147,7 +147,8 @@ fi
 
 echo "[6/7] Updating isolinux config..."
 if [[ -f "$BUILD_DIR/iso/isolinux/txt.cfg" ]]; then
-    sed -i 's|append |append auto=true priority=critical preseed/file=/cdrom/preseed.cfg |' "$BUILD_DIR/iso/isolinux/txt.cfg"
+    INSTALLER_PARAMS='priority=high locale?=en_US.UTF-8 keymap?=tr time/zone=Europe/Istanbul preseed/file=/cdrom/preseed.cfg'
+    sed -i "s|append |append $INSTALLER_PARAMS |" "$BUILD_DIR/iso/isolinux/txt.cfg"
 fi
 
 echo "[7/7] Building ISO..."
