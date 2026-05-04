@@ -147,7 +147,7 @@ fi
 
 echo "[6/7] Updating isolinux config..."
 if [[ -f "$BUILD_DIR/iso/isolinux/txt.cfg" ]]; then
-    sed -i 's|append |append auto=true priority=high preseed/file=/cdrom/preseed.cfg |' "$BUILD_DIR/iso/isolinux/txt.cfg"
+    sed -i 's|append |append auto=true priority=critical preseed/file=/cdrom/preseed.cfg |' "$BUILD_DIR/iso/isolinux/txt.cfg"
 fi
 
 echo "[7/7] Building ISO..."
