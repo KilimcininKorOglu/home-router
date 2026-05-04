@@ -67,7 +67,7 @@ make iso DEBIAN_ISO=/path/to/debian-12-netinst.iso
 # Burns a preseed ISO with embedded packages -- no internet required during install
 ```
 
-The preseed installer asks 6 questions: hostname, root password, web UI password, timezone, keyboard layout, and disk selection.
+The preseed installer asks 7 questions: language/locale, keyboard layout, timezone, hostname, root password, web UI admin password, and disk selection.
 
 ## Architecture
 
@@ -81,7 +81,7 @@ The preseed installer asks 6 questions: hostname, root password, web UI password
                     |    (unprivileged user)     |
                     |                           |
                     |  Web Server + Auth + SSE   |
-                    |  16 Services + Handlers    |
+                    |  18 Services + Handlers    |
                     |  Template Renderer + i18n  |
                     +-------------+-------------+
                                   | JSON-RPC 2.0
@@ -102,7 +102,7 @@ Two-process privilege separation: the web process never runs as root. All privil
 
 | Layer        | Technology                                             |
 |--------------|--------------------------------------------------------|
-| Language     | Go 1.22+ (standard library + 3 dependencies)           |
+| Language     | Go 1.22+ (standard library + 4 dependencies)           |
 | Frontend     | HTMX + SSE + minimal vanilla JS                        |
 | Templating   | Go `html/template` with layout inheritance             |
 | Config       | YAML with AES-256-GCM encrypted credentials            |
@@ -113,7 +113,7 @@ Two-process privilege separation: the web process never runs as root. All privil
 | QoS          | CAKE qdisc + IFB ingress shaping                       |
 | TLS          | Self-signed ECDSA P-256 (auto-generated), mkcert, ACME |
 | Deploy       | Single binary (`go:embed`), systemd, preseed ISO       |
-| Dependencies | 3 direct Go modules (see table below)                  |
+| Dependencies | 4 direct Go modules (see table below)                  |
 
 ### Go Module Dependencies
 
@@ -122,6 +122,7 @@ Two-process privilege separation: the web process never runs as root. All privil
 | `gopkg.in/yaml.v3`            | v3.0.1  | YAML config parsing and serialization (`router.yaml`)     |
 | `golang.org/x/crypto`         | v0.50.0 | bcrypt password hashing, scrypt key derivation for backup |
 | `github.com/gorilla/sessions` | v1.4.0  | Secure cookie-based HTTP session management               |
+| `golang.org/x/net`            | v0.53.0 | DNS wire format (dnsmessage) for DoT upstream probe       |
 
 No frontend build tools, no npm, no ORM, no database driver. The web frontend uses embedded HTMX with vanilla JavaScript.
 
@@ -162,7 +163,7 @@ go vet ./...              # Static analysis
 ### Project Structure
 
 ```
-cmd/home-router/        CLI entry point (serve, agent, version, hash-password, gen-cert)
+cmd/home-router/        CLI entry point (serve, agent, version, hash-password, gen-cert, render-configs)
 internal/
   agent/                JSON-RPC 2.0 IPC (server + client)
   config/               YAML config structs, crypto, TLS
