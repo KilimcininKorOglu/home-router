@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
 )
 
 func TestGenerateSelfSignedCert(t *testing.T) {

@@ -6,17 +6,17 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
-	"github.com/KilimcininKorOglu/home-router/internal/services"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/services"
 )
 
 // runRenderConfigs renders every service-managed /etc/* config file from the
-// home-router templates and exits. It does NOT reload any service. Suitable
+// lankeeper templates and exits. It does NOT reload any service. Suitable
 // for install-time invocation: run before native Debian services start so
-// they come up on first boot using home-router-managed configs.
+// they come up on first boot using lankeeper-managed configs.
 func runRenderConfigs() error {
 	fs := flag.NewFlagSet("render-configs", flag.ExitOnError)
-	configPath := fs.String("config", "/etc/home-router/router.yaml", "config file path")
+	configPath := fs.String("config", "/etc/lankeeper/router.yaml", "config file path")
 	cwd := fs.String("cwd", "", "directory to chdir into so template.ParseFiles(\"configs/sysconf/*.tmpl\") resolves; the directory MUST contain a configs/sysconf/ subtree")
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		return err

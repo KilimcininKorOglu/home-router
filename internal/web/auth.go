@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	sessionName    = "home-router"
+	sessionName    = "lankeeper"
 	sessionKeyAuth = "authenticated"
 )
 

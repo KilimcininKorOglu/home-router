@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KilimcininKorOglu/home-router/internal/netutil"
+	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
 )
 
 func TestRunSimple(t *testing.T) {

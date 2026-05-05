@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/KilimcininKorOglu/home-router/internal/web"
+	"github.com/KilimcininKorOglu/lankeeper/internal/web"
 )
 
 func TestRateLimiter(t *testing.T) {

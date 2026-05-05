@@ -5,14 +5,14 @@ set -euo pipefail
 # pattern used in deploy/iso/post-install.sh for consistency.
 shopt -s nullglob
 
-BINARY_NAME="home-router"
+BINARY_NAME="lankeeper"
 INSTALL_DIR="/usr/local/bin"
-CONFIG_DIR="/etc/home-router"
-DATA_DIR="/var/lib/home-router"
-LOG_DIR="/var/log/home-router"
+CONFIG_DIR="/etc/lankeeper"
+DATA_DIR="/var/lib/lankeeper"
+LOG_DIR="/var/log/lankeeper"
 SYSTEMD_DIR="/etc/systemd/system"
-SYSCTL_CONF="/etc/sysctl.d/99-home-router.conf"
-SERVICE_USER="homerouter"
+SYSCTL_CONF="/etc/sysctl.d/99-lankeeper.conf"
+SERVICE_USER="lankeeper"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -71,7 +71,7 @@ create_user() {
         return
     fi
 
-    useradd --system --no-create-home --home-dir /opt/home-router \
+    useradd --system --no-create-home --home-dir /opt/lankeeper \
         --shell /usr/sbin/nologin "$SERVICE_USER"
     log_info "Created system user: $SERVICE_USER"
 }
@@ -111,14 +111,14 @@ install_systemd_units() {
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-    cp "$script_dir/systemd/home-router-agent.service" "$SYSTEMD_DIR/"
-    cp "$script_dir/systemd/home-router-web.service" "$SYSTEMD_DIR/"
-    cp "$script_dir/systemd/home-router.target" "$SYSTEMD_DIR/"
+    cp "$script_dir/systemd/lankeeper-agent.service" "$SYSTEMD_DIR/"
+    cp "$script_dir/systemd/lankeeper-web.service" "$SYSTEMD_DIR/"
+    cp "$script_dir/systemd/lankeeper.target" "$SYSTEMD_DIR/"
 
     if ! systemctl daemon-reload; then
         log_warn "systemctl daemon-reload failed (chroot or no dbus)"
     fi
-    if ! systemctl enable home-router.target; then
+    if ! systemctl enable lankeeper.target; then
         log_warn "systemctl enable failed; will be enabled on first boot"
     fi
     log_info "Installed systemd units"
@@ -126,7 +126,7 @@ install_systemd_units() {
 
 setup_sysctl() {
     cat > "$SYSCTL_CONF" <<'SYSCTL'
-# Home Router — network forwarding and hardening
+# LANKeeper — network forwarding and hardening
 net.ipv4.ip_forward = 1
 net.ipv6.conf.all.forwarding = 1
 net.ipv4.conf.all.rp_filter = 1
@@ -244,7 +244,7 @@ ask_admin_password() {
         sed -i "s|adminPasswordHash:.*|adminPasswordHash: \"$hash\"|" "$CONFIG_DIR/router.yaml"
         log_info "Yönetici şifresi yapılandırmaya yazıldı / Admin password hash written to config"
     else
-        log_error "Şifre hash'lenemedi (home-router hash-password başarısız) / Failed to hash password"
+        log_error "Şifre hash'lenemedi (lankeeper hash-password başarısız) / Failed to hash password"
         exit 1
     fi
 }
@@ -337,8 +337,8 @@ print_summary() {
 
     echo ""
     echo "============================================="
-    echo "  Home Router Kurulumu Tamamlandı"
-    echo "  Home Router Installation Complete"
+    echo "  LANKeeper Kurulumu Tamamlandı"
+    echo "  LANKeeper Installation Complete"
     echo "============================================="
     echo ""
     echo "  Version:  $version"
@@ -346,9 +346,9 @@ print_summary() {
     echo "  Binary:   $INSTALL_DIR/$BINARY_NAME"
     echo "  Logs:     $LOG_DIR/"
     echo ""
-    echo "  Start:    systemctl start home-router.target"
-    echo "  Status:   systemctl status home-router.target"
-    echo "  Logs:     journalctl -u home-router-web -f"
+    echo "  Start:    systemctl start lankeeper.target"
+    echo "  Status:   systemctl status lankeeper.target"
+    echo "  Logs:     journalctl -u lankeeper-web -f"
     echo ""
     echo "  Web arayüzü / Web UI: https://<LAN_IP>:8443"
     echo ""
@@ -358,14 +358,14 @@ print_summary() {
 setup_bootstrap_firewall() {
     # Write a minimal /etc/nftables.conf and enable nftables.service so
     # the kernel loads a restrictive ruleset before sshd starts on every
-    # boot. The home-router agent's Apply() replaces this with the full
+    # boot. The lankeeper agent's Apply() replaces this with the full
     # rendered template once the user has assigned interface roles via
     # the web UI; until then this is the pre-agent safety net.
     #
     # Assumes default LAN subnet 10.10.10.0/24 (router.yaml default).
     cat > /etc/nftables.conf <<'NFT'
 #!/usr/sbin/nft -f
-# Home Router bootstrap ruleset — pre-agent boot safety net.
+# LANKeeper bootstrap ruleset — pre-agent boot safety net.
 # Replaced at runtime by the rendered template once the agent applies.
 
 flush ruleset
@@ -422,14 +422,14 @@ setup_dhcp_dns_script() {
         return
     fi
 
-    mkdir -p /usr/local/lib/home-router
-    cp "$script_dir/dhcp-dns-update.sh" /usr/local/lib/home-router/
-    chmod +x /usr/local/lib/home-router/dhcp-dns-update.sh
+    mkdir -p /usr/local/lib/lankeeper
+    cp "$script_dir/dhcp-dns-update.sh" /usr/local/lib/lankeeper/
+    chmod +x /usr/local/lib/lankeeper/dhcp-dns-update.sh
     log_info "Installed DHCP-DNS update script"
 }
 
 setup_udev_rules() {
-    cat > /etc/udev/rules.d/70-home-router.rules <<'UDEV'
+    cat > /etc/udev/rules.d/70-lankeeper.rules <<'UDEV'
 # USB tethering — Android RNDIS
 SUBSYSTEM=="net", ACTION=="add", DRIVER=="rndis_host", NAME="usb0"
 UDEV
@@ -494,7 +494,7 @@ setup_render_configs() {
 
 enable_native_services() {
     # Native Debian services (unbound, dnsmasq, chrony, rsyslog, smbd,
-    # nmbd) start on boot using the home-router-rendered configs in
+    # nmbd) start on boot using the lankeeper-rendered configs in
     # /etc/. dnsmasq is default-disabled in Debian; force-enable.
     for svc in unbound dnsmasq chrony rsyslog smbd nmbd; do
         if systemctl enable "$svc" 2>/dev/null; then
@@ -524,7 +524,7 @@ check_installation() {
         ((errors++))
     fi
 
-    for unit in home-router-agent.service home-router-web.service home-router.target; do
+    for unit in lankeeper-agent.service lankeeper-web.service lankeeper.target; do
         if [[ -f "$SYSTEMD_DIR/$unit" ]]; then
             echo "  [OK] $unit"
         else
@@ -560,7 +560,7 @@ main() {
     check_root
     check_debian
 
-    local binary_path="${1:-./home-router}"
+    local binary_path="${1:-./lankeeper}"
 
     install_dependencies
     create_user

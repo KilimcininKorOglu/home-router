@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
-	"github.com/KilimcininKorOglu/home-router/internal/i18n"
-	"github.com/KilimcininKorOglu/home-router/internal/netutil"
-	"github.com/KilimcininKorOglu/home-router/internal/services"
-	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/i18n"
+	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
+	"github.com/KilimcininKorOglu/lankeeper/internal/services"
+	"github.com/KilimcininKorOglu/lankeeper/internal/tmpl"
 )
 
 var dnsNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.-]{0,251}[a-zA-Z0-9]$`)

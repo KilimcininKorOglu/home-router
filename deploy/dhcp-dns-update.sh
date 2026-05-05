@@ -8,8 +8,8 @@ IP="$3"
 HOSTNAME="$4"
 DOMAIN="lan"
 
-if [[ -f /etc/home-router/router.yaml ]]; then
-    CONFIGURED_DOMAIN=$(grep -oP 'domain:\s*"\K[^"]+' /etc/home-router/router.yaml 2>/dev/null)
+if [[ -f /etc/lankeeper/router.yaml ]]; then
+    CONFIGURED_DOMAIN=$(grep -oP 'domain:\s*"\K[^"]+' /etc/lankeeper/router.yaml 2>/dev/null)
     if [[ -n "$CONFIGURED_DOMAIN" ]]; then
         DOMAIN="$CONFIGURED_DOMAIN"
     fi

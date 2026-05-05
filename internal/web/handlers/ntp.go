@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/KilimcininKorOglu/home-router/internal/i18n"
-	"github.com/KilimcininKorOglu/home-router/internal/netutil"
-	"github.com/KilimcininKorOglu/home-router/internal/services"
-	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
+	"github.com/KilimcininKorOglu/lankeeper/internal/i18n"
+	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
+	"github.com/KilimcininKorOglu/lankeeper/internal/services"
+	"github.com/KilimcininKorOglu/lankeeper/internal/tmpl"
 )
 
 type NTPHandler struct {

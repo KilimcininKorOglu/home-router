@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
-	"github.com/KilimcininKorOglu/home-router/internal/i18n"
-	"github.com/KilimcininKorOglu/home-router/internal/netutil"
-	"github.com/KilimcininKorOglu/home-router/internal/services"
-	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/i18n"
+	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
+	"github.com/KilimcininKorOglu/lankeeper/internal/services"
+	"github.com/KilimcininKorOglu/lankeeper/internal/tmpl"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -220,7 +220,7 @@ func (h *SystemHandler) HandleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	outputPath := filepath.Join(os.TempDir(), fmt.Sprintf("home-router-backup-%s.tar.gz.enc", time.Now().Format("20060102-150405")))
+	outputPath := filepath.Join(os.TempDir(), fmt.Sprintf("lankeeper-backup-%s.tar.gz.enc", time.Now().Format("20060102-150405")))
 
 	if err := h.backup.Export(r.Context(), outputPath, passphrase); err != nil {
 		http.Error(w, "export failed", http.StatusInternalServerError)
@@ -241,7 +241,7 @@ func (h *SystemHandler) HandleImport(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	tmpFile, err := os.CreateTemp("", "home-router-import-*.tar.gz")
+	tmpFile, err := os.CreateTemp("", "lankeeper-import-*.tar.gz")
 	if err != nil {
 		http.Error(w, "failed to create temp file", http.StatusInternalServerError)
 		return

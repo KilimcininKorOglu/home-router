@@ -3,7 +3,7 @@ package web_test
 import (
 	"testing"
 
-	"github.com/KilimcininKorOglu/home-router/internal/web"
+	"github.com/KilimcininKorOglu/lankeeper/internal/web"
 )
 
 func TestSSEBrokerPubSub(t *testing.T) {

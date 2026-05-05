@@ -10,19 +10,19 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/KilimcininKorOglu/home-router/internal/agent"
-	"github.com/KilimcininKorOglu/home-router/internal/config"
-	"github.com/KilimcininKorOglu/home-router/internal/i18n"
-	"github.com/KilimcininKorOglu/home-router/internal/netutil"
-	"github.com/KilimcininKorOglu/home-router/internal/services"
-	"github.com/KilimcininKorOglu/home-router/internal/web"
-	webFS "github.com/KilimcininKorOglu/home-router/web"
+	"github.com/KilimcininKorOglu/lankeeper/internal/agent"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/i18n"
+	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
+	"github.com/KilimcininKorOglu/lankeeper/internal/services"
+	"github.com/KilimcininKorOglu/lankeeper/internal/web"
+	webFS "github.com/KilimcininKorOglu/lankeeper/web"
 )
 
 func runServe() error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	configPath := fs.String("config", "/etc/home-router/router.yaml", "config file path")
-	socketPath := fs.String("socket", "/run/home-router/agent.sock", "agent UDS path")
+	configPath := fs.String("config", "/etc/lankeeper/router.yaml", "config file path")
+	socketPath := fs.String("socket", "/run/lankeeper/agent.sock", "agent UDS path")
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func runServe() error {
 	agentClient := agent.NewClient(*socketPath)
 	netutil.SetAgentClient(agentClient)
 
-	backupSvc := services.NewBackupService("/etc/home-router")
+	backupSvc := services.NewBackupService("/etc/lankeeper")
 	updateSvc := services.NewUpdateService(version, commit, date, backupSvc)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -66,7 +66,7 @@ func runServe() error {
 		return fmt.Errorf("failed to create web server: %w", err)
 	}
 
-	log.Printf("home-router serve starting (bind=%s:%d, lang=%s)",
+	log.Printf("lankeeper serve starting (bind=%s:%d, lang=%s)",
 		cfg.System.WebBind, cfg.System.WebPort, loc.Fallback())
 
 	return srv.Serve(ctx)

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KilimcininKorOglu/home-router/internal/netutil"
+	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
 )
 
 type MonitorService struct {

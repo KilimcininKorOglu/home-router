@@ -3,8 +3,8 @@ package services_test
 import (
 	"testing"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
-	"github.com/KilimcininKorOglu/home-router/internal/services"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/services"
 )
 
 func TestNewDNSService(t *testing.T) {

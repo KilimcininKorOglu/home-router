@@ -95,7 +95,7 @@ func generateSelfSigned(cfg *TLSConfig, certPath, keyPath string) (*TLSCertInfo,
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			CommonName:   cn,
-			Organization: []string{"Home Router"},
+			Organization: []string{"LANKeeper"},
 		},
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,

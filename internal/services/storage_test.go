@@ -3,8 +3,8 @@ package services_test
 import (
 	"testing"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
-	"github.com/KilimcininKorOglu/home-router/internal/services"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/services"
 )
 
 func TestNewStorageService(t *testing.T) {
@@ -16,7 +16,7 @@ func TestNewStorageService(t *testing.T) {
 }
 
 func TestNewBackupService(t *testing.T) {
-	svc := services.NewBackupService("/etc/home-router")
+	svc := services.NewBackupService("/etc/lankeeper")
 	if svc == nil {
 		t.Fatal("service should not be nil")
 	}

@@ -50,20 +50,20 @@ var allowedWriteRules = []pathRule{
 	{"/etc/samba/", dirPrefix},
 	{"/etc/chrony/", dirPrefix},
 	{"/etc/rsyslog.d/", dirPrefix},
-	{"/etc/home-router/", dirPrefix},
+	{"/etc/lankeeper/", dirPrefix},
 	{"/etc/default/grub.d/", dirPrefix},
 	{"/etc/fstab", exactFile},
 	{"/etc/pppoe-server-options", exactFile},
 	{"/var/log/", dirPrefix},
 	{"/tmp/nftables-", filenamePrefix},
-	{"/tmp/home-router-", filenamePrefix},
+	{"/tmp/lankeeper-", filenamePrefix},
 }
 
 var allowedReadRules = []pathRule{
 	{"/etc/ppp/", dirPrefix},
 	{"/etc/openvpn/", dirPrefix},
 	{"/etc/wireguard/", dirPrefix},
-	{"/etc/home-router/", dirPrefix},
+	{"/etc/lankeeper/", dirPrefix},
 	{"/etc/unbound/", dirPrefix},
 	{"/etc/dnsmasq.conf", exactFile},
 	{"/etc/dnsmasq.d/", dirPrefix},
@@ -75,7 +75,7 @@ var allowedReadRules = []pathRule{
 	{"/var/run/", dirPrefix},
 	{"/proc/mdstat", exactFile},
 	{"/tmp/nftables-", filenamePrefix},
-	{"/tmp/home-router-", filenamePrefix},
+	{"/tmp/lankeeper-", filenamePrefix},
 }
 
 func init() {

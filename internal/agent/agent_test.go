@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KilimcininKorOglu/home-router/internal/agent"
+	"github.com/KilimcininKorOglu/lankeeper/internal/agent"
 )
 
 func waitForSocket(t *testing.T, sock string, errCh <-chan error) {

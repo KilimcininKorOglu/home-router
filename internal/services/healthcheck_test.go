@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
-	"github.com/KilimcininKorOglu/home-router/internal/services"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/services"
 )
 
 func TestNewHealthCheckService(t *testing.T) {

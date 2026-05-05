@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG_DIR="/etc/home-router"
-DEFAULTS_DIR="/opt/home-router/configs/defaults"
+CONFIG_DIR="/etc/lankeeper"
+DEFAULTS_DIR="/opt/lankeeper/configs/defaults"
 
 echo "WARNING: This will reset ALL configuration to factory defaults."
 read -rp "Continue? [y/N] " confirm
@@ -19,5 +19,5 @@ fi
 cp "$DEFAULTS_DIR"/*.yaml "$CONFIG_DIR/"
 echo "Configuration reset to factory defaults."
 
-systemctl restart home-router.target
+systemctl restart lankeeper.target
 echo "Services restarted."

@@ -6,11 +6,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/KilimcininKorOglu/home-router/internal/netutil"
+	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
 )
 
 const (
-	firstBootFlag   = "/var/lib/home-router/.first-boot"
+	firstBootFlag   = "/var/lib/lankeeper/.first-boot"
 	firstBootBridge = "br0"
 	firstBootIP     = "10.10.10.1"
 	firstBootCIDR   = "10.10.10.1/24"

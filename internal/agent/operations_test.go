@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/KilimcininKorOglu/home-router/internal/agent"
+	"github.com/KilimcininKorOglu/lankeeper/internal/agent"
 )
 
 func TestExecRunWhitelistAllowed(t *testing.T) {
@@ -51,7 +51,7 @@ func TestFileWriteAllowedPath(t *testing.T) {
 	agent.RegisterBuiltinOps(srv)
 
 	params, _ := json.Marshal(agent.FileWriteParams{
-		Path:    "/tmp/home-router-test-write.txt",
+		Path:    "/tmp/lankeeper-test-write.txt",
 		Content: "test content",
 		Mode:    0o644,
 	})

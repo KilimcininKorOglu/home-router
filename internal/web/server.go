@@ -10,11 +10,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
-	"github.com/KilimcininKorOglu/home-router/internal/i18n"
-	"github.com/KilimcininKorOglu/home-router/internal/services"
-	"github.com/KilimcininKorOglu/home-router/internal/tmpl"
-	"github.com/KilimcininKorOglu/home-router/internal/web/handlers"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/i18n"
+	"github.com/KilimcininKorOglu/lankeeper/internal/services"
+	"github.com/KilimcininKorOglu/lankeeper/internal/tmpl"
+	"github.com/KilimcininKorOglu/lankeeper/internal/web/handlers"
 )
 
 type Server struct {
@@ -104,7 +104,7 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 	ntpSvc := services.NewNTPService(cfg)
 	ntpHandler := handlers.NewNTPHandler(renderer, ntpSvc)
 
-	backupSvc := services.NewBackupService("/etc/home-router")
+	backupSvc := services.NewBackupService("/etc/lankeeper")
 	monitorSvc := services.NewMonitorService()
 	dashboardHandler := handlers.NewDashboardHandler(renderer, monitorSvc, pppoeSvc, dhcpSvc)
 	settingsHandler := handlers.NewSystemHandler(renderer, cfg, loc, dhcpSvc, backupSvc, updateSvc)
@@ -196,7 +196,7 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	log.Printf("web server listening on %s (TLS mode: %s)", s.http.Addr, s.cfg.System.TLS.Mode)
 
-	dataDir := "/var/lib/home-router"
+	dataDir := "/var/lib/lankeeper"
 	certInfo, err := config.EnsureTLSCert(&s.cfg.System.TLS, dataDir)
 	if err != nil {
 		return fmt.Errorf("ensure TLS cert: %w", err)
@@ -206,10 +206,10 @@ func (s *Server) Serve(ctx context.Context) error {
 	certFile := s.cfg.System.TLS.CertFile
 	keyFile := s.cfg.System.TLS.KeyFile
 	if certFile == "" {
-		certFile = "/var/lib/home-router/tls/server.crt"
+		certFile = "/var/lib/lankeeper/tls/server.crt"
 	}
 	if keyFile == "" {
-		keyFile = "/var/lib/home-router/tls/server.key"
+		keyFile = "/var/lib/lankeeper/tls/server.key"
 	}
 
 	// Retro-mirror DHCP static leases to DNS so hosts added in older

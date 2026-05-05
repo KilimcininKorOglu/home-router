@@ -6,21 +6,21 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 DEBIAN_ISO="${1:-}"
 ARCH="${ARCH:-${3:-amd64}}"
-BINARY_PATH="${2:-$PROJECT_ROOT/dist/home-router-linux-$ARCH}"
-OUTPUT_ISO="${OUTPUT_ISO:-${4:-$PROJECT_ROOT/dist/home-router-installer-$ARCH.iso}}"
+BINARY_PATH="${2:-$PROJECT_ROOT/dist/lankeeper-linux-$ARCH}"
+OUTPUT_ISO="${OUTPUT_ISO:-${4:-$PROJECT_ROOT/dist/lankeeper-installer-$ARCH.iso}}"
 VERSION="${VERSION:-${5:-dev}}"
-BUILD_DIR="${BUILD_DIR:-/tmp/home-router-iso-build-$ARCH}"
+BUILD_DIR="${BUILD_DIR:-/tmp/lankeeper-iso-build-$ARCH}"
 PACKAGE_REPO_DIR="${PACKAGE_REPO_DIR:-$PROJECT_ROOT/dist/packages/$ARCH}"
 SED_VERSION="${VERSION//\\/\\\\}"
 SED_VERSION="${SED_VERSION//&/\\&}"
 SED_VERSION="${SED_VERSION//|/\\|}"
 
 if [[ -z "$DEBIAN_ISO" ]]; then
-    echo "Usage: $0 <debian-netinst.iso> [home-router-binary] [amd64|arm64] [output.iso] [version]"
+    echo "Usage: $0 <debian-netinst.iso> [lankeeper-binary] [amd64|arm64] [output.iso] [version]"
     echo ""
     echo "Example:"
     echo "  make cross-amd64"
-    echo "  $0 debian-12.10.0-amd64-netinst.iso dist/home-router-linux-amd64 amd64"
+    echo "  $0 debian-12.10.0-amd64-netinst.iso dist/lankeeper-linux-amd64 amd64"
     exit 1
 fi
 
@@ -65,7 +65,7 @@ PACKAGES=(
     wide-dhcpv6-client curl jq hdparm openssh-server
 )
 
-echo "=== Building Home Router Installer ISO ==="
+echo "=== Building LANKeeper Installer ISO ==="
 echo "  Architecture: $ARCH"
 echo "  Debian ISO: $DEBIAN_ISO"
 echo "  Binary:     $BINARY_PATH"
@@ -129,11 +129,11 @@ mkdir -p "$BUILD_DIR/iso/pool/extra"
 cp "$PACKAGE_REPO_DIR"/*.deb "$BUILD_DIR/iso/pool/extra/"
 cp "$PACKAGE_REPO_DIR"/Packages "$PACKAGE_REPO_DIR"/Packages.gz "$BUILD_DIR/iso/pool/extra/"
 
-echo "[4/7] Adding home-router files..."
-cp "$BINARY_PATH" "$BUILD_DIR/iso/home-router"
+echo "[4/7] Adding lankeeper files..."
+cp "$BINARY_PATH" "$BUILD_DIR/iso/lankeeper"
 cp "$SCRIPT_DIR/preseed.cfg" "$BUILD_DIR/iso/"
 cp "$SCRIPT_DIR/post-install.sh" "$BUILD_DIR/iso/"
-sed -i "s|__HOME_ROUTER_VERSION__|$SED_VERSION|g" "$BUILD_DIR/iso/post-install.sh"
+sed -i "s|__LANKEEPER_VERSION__|$SED_VERSION|g" "$BUILD_DIR/iso/post-install.sh"
 find -L /usr/share/zoneinfo -type f \
     | sed 's|^/usr/share/zoneinfo/||' \
     | grep -E '^(Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific|Etc)/|^(CET|EET|GMT|MET|UTC|WET)$' \
@@ -154,9 +154,9 @@ if [[ ! -e "${sysconf_tmpls[0]}" ]]; then
 fi
 
 required_units=(
-    "$PROJECT_ROOT/deploy/systemd/home-router-agent.service"
-    "$PROJECT_ROOT/deploy/systemd/home-router-web.service"
-    "$PROJECT_ROOT/deploy/systemd/home-router.target"
+    "$PROJECT_ROOT/deploy/systemd/lankeeper-agent.service"
+    "$PROJECT_ROOT/deploy/systemd/lankeeper-web.service"
+    "$PROJECT_ROOT/deploy/systemd/lankeeper.target"
 )
 for unit in "${required_units[@]}"; do
     if [[ ! -f "$unit" ]]; then
@@ -213,14 +213,14 @@ fi
 sed \
     -e "s|__KERNEL_PATH__|$KERNEL_PATH|g" \
     -e "s|__INITRD_PATH__|$INITRD_PATH|g" \
-    -e "s|__HOME_ROUTER_VERSION__|$SED_VERSION|g" \
+    -e "s|__LANKEEPER_VERSION__|$SED_VERSION|g" \
     "$SCRIPT_DIR/grub.cfg" > "$BUILD_DIR/iso/boot/grub/grub.cfg"
 echo "  Installer boot files: $KERNEL_PATH $INITRD_PATH"
 
 # Fix EFI boot chain -- replace disk UUID search with cdrom search
 if [[ -f "$BUILD_DIR/iso/EFI/debian/grub.cfg" ]]; then
     cat > "$BUILD_DIR/iso/EFI/debian/grub.cfg" <<'EFICFG'
-search --set=root --file /home-router
+search --set=root --file /lankeeper
 set prefix=($root)/boot/grub
 source $prefix/grub.cfg
 EFICFG
@@ -233,7 +233,7 @@ if [[ -f "$BUILD_DIR/iso/isolinux/txt.cfg" ]]; then
 default install
 
 label install
-    menu label ^Home Router Install $VERSION
+    menu label ^LANKeeper Install $VERSION
     menu default
     kernel $KERNEL_PATH
     append initrd=$INITRD_PATH $INSTALLER_PARAMS ---
@@ -244,7 +244,7 @@ echo "[7/7] Building ISO..."
 case "$ARCH" in
     amd64)
         xorriso -as mkisofs \
-            -r -V "HomeRouter" \
+            -r -V "LANKeeper" \
             -o "$OUTPUT_ISO" \
             -J -joliet-long \
             -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
@@ -275,7 +275,7 @@ case "$ARCH" in
         fi
         dd if="$DEBIAN_ISO" bs=512 skip="$START_BLOCK" count="$BLOCK_COUNT" of="$EFI_IMG" status=none
         xorriso -as mkisofs \
-            -r -V "HomeRouter" \
+            -r -V "LANKeeper" \
             -o "$OUTPUT_ISO" \
             -J -joliet-long \
             -e boot/grub/efi.img \

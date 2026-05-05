@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KilimcininKorOglu/home-router/internal/netutil"
+	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
 )
 
 type UpdateService struct {
@@ -41,12 +41,12 @@ type UpdateService struct {
 }
 
 const (
-	defaultUpdateStatePath = "/var/lib/home-router/update-state.json"
+	defaultUpdateStatePath = "/var/lib/lankeeper/update-state.json"
 	updateConfirmWindow    = 60 * time.Second
 )
 
 func NewUpdateService(version, commit, date string, backup *BackupService) *UpdateService {
-	statePath := os.Getenv("HOME_ROUTER_UPDATE_STATE")
+	statePath := os.Getenv("LANKEEPER_UPDATE_STATE")
 	if statePath == "" {
 		statePath = defaultUpdateStatePath
 	}
@@ -56,10 +56,10 @@ func NewUpdateService(version, commit, date string, backup *BackupService) *Upda
 		currentCommit:  commit,
 		currentDate:    date,
 		architecture:   runtime.GOARCH,
-		binaryPath:     "/usr/local/bin/home-router",
+		binaryPath:     "/usr/local/bin/lankeeper",
 		statePath:      statePath,
 		repoOwner:      "KilimcininKorOglu",
-		repoName:       "home-router",
+		repoName:       "lankeeper",
 		backup:         backup,
 	}
 	svc.restorePendingUpdate()
@@ -135,7 +135,7 @@ func (s *UpdateService) CheckForUpdate(ctx context.Context) (*UpdateInfo, error)
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "home-router/"+s.currentVersion)
+	req.Header.Set("User-Agent", "lankeeper/"+s.currentVersion)
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
@@ -189,7 +189,7 @@ func (s *UpdateService) ApplyUpdate(ctx context.Context, info *UpdateInfo) error
 	log.Printf("starting update from %s to %s", s.currentVersion, info.LatestVersion)
 
 	if s.backup != nil {
-		backupPath := fmt.Sprintf("/var/lib/home-router/backups/pre-update-%s.tar.gz", info.LatestVersion)
+		backupPath := fmt.Sprintf("/var/lib/lankeeper/backups/pre-update-%s.tar.gz", info.LatestVersion)
 		os.MkdirAll(filepath.Dir(backupPath), 0o755)
 		if err := s.backup.Export(ctx, backupPath, ""); err != nil {
 			log.Printf("pre-update backup failed (continuing): %v", err)
@@ -206,7 +206,7 @@ func (s *UpdateService) ApplyUpdate(ctx context.Context, info *UpdateInfo) error
 		return fmt.Errorf("checksum verification: %w", err)
 	}
 
-	tmpBinary := "/tmp/home-router-new"
+	tmpBinary := "/tmp/lankeeper-new"
 	if err := s.extractBinary(tmpArchive, tmpBinary); err != nil {
 		return fmt.Errorf("extract: %w", err)
 	}
@@ -257,7 +257,7 @@ func (s *UpdateService) ApplyUpdate(ctx context.Context, info *UpdateInfo) error
 	log.Printf("update to %s applied, waiting for confirmation (60s watchdog)", info.LatestVersion)
 
 	s.updateBootBranding(ctx, info.LatestVersion)
-	netutil.Run(ctx, "systemctl", "restart", "home-router.target")
+	netutil.Run(ctx, "systemctl", "restart", "lankeeper.target")
 
 	return nil
 }
@@ -314,7 +314,7 @@ func (s *UpdateService) Rollback(ctx context.Context) error {
 	s.previousVersion = ""
 	s.backupBinary = ""
 
-	netutil.Run(ctx, "systemctl", "restart", "home-router.target")
+	netutil.Run(ctx, "systemctl", "restart", "lankeeper.target")
 
 	return nil
 }
@@ -389,8 +389,8 @@ func (s *UpdateService) updateBootBranding(ctx context.Context, version string) 
 		return
 	}
 
-	content := fmt.Sprintf("GRUB_DISTRIBUTOR=\"Home Router %s\"\n", version)
-	if err := netutil.WriteFile("/etc/default/grub.d/home-router.cfg", []byte(content), 0o644); err != nil {
+	content := fmt.Sprintf("GRUB_DISTRIBUTOR=\"LANKeeper %s\"\n", version)
+	if err := netutil.WriteFile("/etc/default/grub.d/lankeeper.cfg", []byte(content), 0o644); err != nil {
 		log.Printf("update: GRUB branding write failed: %v", err)
 		return
 	}
@@ -413,7 +413,7 @@ func (s *UpdateService) runBinaryVersion(ctx context.Context) (string, error) {
 func safeUpdateFileName(name string) string {
 	name = filepath.Base(strings.TrimSpace(name))
 	if name == "." || name == string(filepath.Separator) || name == "" {
-		return "home-router-update.tar.gz"
+		return "lankeeper-update.tar.gz"
 	}
 	return name
 }
@@ -423,7 +423,7 @@ func (s *UpdateService) downloadFile(ctx context.Context, url, dest string) erro
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "home-router/"+s.currentVersion)
+	req.Header.Set("User-Agent", "lankeeper/"+s.currentVersion)
 
 	client := &http.Client{Timeout: 10 * time.Minute}
 	resp, err := client.Do(req)
@@ -469,7 +469,7 @@ func (s *UpdateService) extractBinary(archivePath, destPath string) error {
 			return fmt.Errorf("tar read: %w", err)
 		}
 
-		if filepath.Base(header.Name) == "home-router" && header.Typeflag == tar.TypeReg {
+		if filepath.Base(header.Name) == "lankeeper" && header.Typeflag == tar.TypeReg {
 			out, err := os.Create(destPath)
 			if err != nil {
 				return err
@@ -484,7 +484,7 @@ func (s *UpdateService) extractBinary(archivePath, destPath string) error {
 		}
 	}
 
-	return fmt.Errorf("binary 'home-router' not found in archive")
+	return fmt.Errorf("binary 'lankeeper' not found in archive")
 }
 
 func CompareSemver(a, b string) int {

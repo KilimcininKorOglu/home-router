@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
-	"github.com/KilimcininKorOglu/home-router/internal/services"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/services"
 )
 
 func TestNewRoutingService(t *testing.T) {

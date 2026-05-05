@@ -1,21 +1,21 @@
 #!/bin/sh
 set -eu
 
-BINARY_NAME="home-router"
+BINARY_NAME="lankeeper"
 INSTALL_DIR="/usr/local/bin"
-CONFIG_DIR="/etc/home-router"
-DATA_DIR="/var/lib/home-router"
-LOG_DIR="/var/log/home-router"
+CONFIG_DIR="/etc/lankeeper"
+DATA_DIR="/var/lib/lankeeper"
+LOG_DIR="/var/log/lankeeper"
 SYSTEMD_DIR="/etc/systemd/system"
-SERVICE_USER="homerouter"
+SERVICE_USER="lankeeper"
 
-echo "=== Home Router Kurulum Sonrası / Post-Install ==="
+echo "=== LANKeeper Kurulum Sonrası / Post-Install ==="
 
 # Install packages from the local ISO repo copied by late_command. Keep apt
 # pointed only at this flat repo so an offline router install never prompts
 # for a Debian CD label or network mirror.
 if [ -d /tmp/pool-extra ] && [ -f /tmp/pool-extra/Packages ]; then
-    cp /etc/apt/sources.list /etc/apt/sources.list.home-router.bak 2>/dev/null || true
+    cp /etc/apt/sources.list /etc/apt/sources.list.lankeeper.bak 2>/dev/null || true
     mkdir -p /etc/apt/sources.list.d
     rm -f /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources
     echo "deb [trusted=yes] file:/tmp/pool-extra ./" > /etc/apt/sources.list
@@ -45,7 +45,7 @@ if [ -s /tmp/timezone.txt ]; then
     fi
 fi
 
-# d-i creates the homerouter user via passwd/make-user=true. If for some
+# d-i creates the lankeeper user via passwd/make-user=true. If for some
 # reason the user is missing here, abort — installing the service with no
 # owner is worse than failing loudly.
 if ! id "$SERVICE_USER" >/dev/null 2>&1; then
@@ -54,11 +54,11 @@ if ! id "$SERVICE_USER" >/dev/null 2>&1; then
 fi
 
 # Install binary
-cp /tmp/home-router "$INSTALL_DIR/$BINARY_NAME"
+cp /tmp/lankeeper "$INSTALL_DIR/$BINARY_NAME"
 chmod +x "$INSTALL_DIR/$BINARY_NAME"
 
-# Create directories with correct ownership for the homerouter service user.
-# The web service runs as homerouter and must be able to write TLS certs,
+# Create directories with correct ownership for the lankeeper service user.
+# The web service runs as lankeeper and must be able to write TLS certs,
 # credentials, backups, and logs.
 mkdir -p "$CONFIG_DIR"
 chmod 750 "$CONFIG_DIR"
@@ -75,7 +75,7 @@ chown unbound:unbound /var/log/unbound 2>/dev/null || true
 mkdir -p /var/log/chrony
 
 # sysctl
-cat > /etc/sysctl.d/99-home-router.conf <<'SYSCTL'
+cat > /etc/sysctl.d/99-lankeeper.conf <<'SYSCTL'
 net.ipv4.ip_forward = 1
 net.ipv6.conf.all.forwarding = 1
 net.ipv4.conf.all.rp_filter = 1
@@ -92,10 +92,10 @@ net.ipv4.icmp_ignore_bogus_error_responses = 1
 SYSCTL
 
 # Apply sysctl immediately
-sysctl -p /etc/sysctl.d/99-home-router.conf >/dev/null 2>&1 || true
+sysctl -p /etc/sysctl.d/99-lankeeper.conf >/dev/null 2>&1 || true
 
 # udev rules
-cat > /etc/udev/rules.d/70-home-router.rules <<'UDEV'
+cat > /etc/udev/rules.d/70-lankeeper.rules <<'UDEV'
 # USB tethering — Android RNDIS
 SUBSYSTEM=="net", ACTION=="add", DRIVER=="rndis_host", NAME="usb0"
 UDEV
@@ -103,9 +103,9 @@ udevadm control --reload-rules 2>/dev/null || true
 
 # DHCP-DNS update helper script
 if [ -f /tmp/dhcp-dns-update.sh ]; then
-    mkdir -p /usr/local/lib/home-router
-    cp /tmp/dhcp-dns-update.sh /usr/local/lib/home-router/
-    chmod +x /usr/local/lib/home-router/dhcp-dns-update.sh
+    mkdir -p /usr/local/lib/lankeeper
+    cp /tmp/dhcp-dns-update.sh /usr/local/lib/lankeeper/
+    chmod +x /usr/local/lib/lankeeper/dhcp-dns-update.sh
 fi
 
 # Sysconf templates — service code calls
@@ -136,7 +136,7 @@ set -- /tmp/systemd/*.target
 
 # Enable services. systemctl in d-i chroot can fail in unusual setups; tolerate.
 systemctl daemon-reload 2>/dev/null || true
-systemctl enable home-router.target 2>/dev/null || true
+systemctl enable lankeeper.target 2>/dev/null || true
 
 # Default config — copy YAML defaults from ISO. Without these, router.yaml
 # would never exist and the admin password / hostname sed steps below would
@@ -216,7 +216,7 @@ touch "$DATA_DIR/.first-boot"
 # nftables.service. Loaded by the kernel before sshd starts (Debian's
 # nftables.service orders Before=network-pre.target), so port 22 is
 # never reachable from a non-LAN source even during the boot transient
-# before the home-router agent applies the live (template-rendered)
+# before the lankeeper agent applies the live (template-rendered)
 # ruleset. The agent's Apply() overwrites this with the full ruleset
 # once the user assigns interface roles via the web UI; until then this
 # bootstrap is the safety net.
@@ -226,7 +226,7 @@ touch "$DATA_DIR/.first-boot"
 # subnets must reach the live ruleset stage before the bootstrap matters.
 cat > /etc/nftables.conf <<'NFT'
 #!/usr/sbin/nft -f
-# Home Router bootstrap ruleset — pre-agent boot safety net.
+# LANKeeper bootstrap ruleset — pre-agent boot safety net.
 # Replaced at runtime by the rendered template once the agent applies.
 
 flush ruleset
@@ -273,10 +273,10 @@ chmod 644 /etc/nftables.conf
 systemctl enable nftables.service 2>/dev/null || true
 
 # GRUB branding — Debian's generated menu defaults to "Debian GNU/Linux".
-# Set the distributor explicitly so the installed disk boots as Home Router.
+# Set the distributor explicitly so the installed disk boots as LANKeeper.
 mkdir -p /etc/default/grub.d
-cat > /etc/default/grub.d/home-router.cfg <<'GRUBCFG'
-GRUB_DISTRIBUTOR="Home Router __HOME_ROUTER_VERSION__"
+cat > /etc/default/grub.d/lankeeper.cfg <<'GRUBCFG'
+GRUB_DISTRIBUTOR="LANKeeper __LANKEEPER_VERSION__"
 GRUBCFG
 if command -v update-grub >/dev/null 2>&1; then
     update-grub >/dev/null 2>&1 || true
@@ -308,7 +308,7 @@ if [ ! -f "$DATA_DIR/tls/server.crt" ] && [ -f "$CONFIG_DIR/router.yaml" ]; then
 fi
 
 # Tüm servis template'lerini /etc/ altına render et. Native Debian servisleri
-# ilk boot'ta home-router config'leriyle başlasın.
+# ilk boot'ta lankeeper config'leriyle başlasın.
 if [ -f "$CONFIG_DIR/router.yaml" ] && [ -d "$DATA_DIR/configs/sysconf" ]; then
     if ! "$INSTALL_DIR/$BINARY_NAME" render-configs \
             --config "$CONFIG_DIR/router.yaml" \
@@ -319,12 +319,12 @@ if [ -f "$CONFIG_DIR/router.yaml" ] && [ -d "$DATA_DIR/configs/sysconf" ]; then
 fi
 
 # Native Debian servislerini enable et — config'ler /etc/ altına yazıldı,
-# ilk boot'ta home-router template'leriyle başlasınlar. dnsmasq Debian'da
+# ilk boot'ta lankeeper template'leriyle başlasınlar. dnsmasq Debian'da
 # default disabled, açıkça enable ediyoruz. Diğerleri de idempotent.
 for svc in unbound dnsmasq chrony rsyslog smbd nmbd; do
     systemctl enable "$svc" 2>/dev/null || true
 done
 
 echo "=== Kurulum tamamlandı / Post-install complete ==="
-echo "Sistem Home Router olarak yeniden başlatılacak. / System will reboot into Home Router."
+echo "Sistem LANKeeper olarak yeniden başlatılacak. / System will reboot into LANKeeper."
 echo "Web arayüzü / Web UI: https://<LAN_IP>:8443"

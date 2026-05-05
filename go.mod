@@ -1,4 +1,4 @@
-module github.com/KilimcininKorOglu/home-router
+module github.com/KilimcininKorOglu/lankeeper
 
 go 1.26.2
 

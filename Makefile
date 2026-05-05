@@ -1,4 +1,4 @@
-BINARY  := home-router
+BINARY  := lankeeper
 DIST_DIR := dist
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -16,16 +16,16 @@ ARM64_RELEASE_DIR := $(DIST_DIR)/release-arm64
 DEBIAN_AMD64_ISO ?= $(DEBIAN_ISO)
 DEBIAN_ARM64_ISO ?=
 DOCKER ?= docker
-ISO_BUILDER_AMD64 ?= home-router-iso-builder-amd64
-ISO_BUILDER_ARM64 ?= home-router-iso-builder-arm64
+ISO_BUILDER_AMD64 ?= lankeeper-iso-builder-amd64
+ISO_BUILDER_ARM64 ?= lankeeper-iso-builder-arm64
 
 .PHONY: build test lint clean dev cross cross-amd64 cross-arm64 cross-all install iso iso-amd64 iso-arm64 iso-all docker-builder-amd64 docker-builder-arm64 docker-builders release release-archives release-amd64 release-arm64 release-all checksums check
 
 build:
-	go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/home-router
+	go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/lankeeper
 
 dev:
-	go build -o $(BINARY) ./cmd/home-router
+	go build -o $(BINARY) ./cmd/lankeeper
 
 test:
 	go test ./... -race -count=1
@@ -41,11 +41,11 @@ cross: cross-amd64
 
 cross-amd64:
 	mkdir -p $(DIST_DIR)
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(AMD64_BINARY) ./cmd/home-router
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(AMD64_BINARY) ./cmd/lankeeper
 
 cross-arm64:
 	mkdir -p $(DIST_DIR)
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(ARM64_BINARY) ./cmd/home-router
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(ARM64_BINARY) ./cmd/lankeeper
 
 cross-all: cross-amd64 cross-arm64
 

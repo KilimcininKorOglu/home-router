@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KilimcininKorOglu/home-router/internal/i18n"
+	"github.com/KilimcininKorOglu/lankeeper/internal/i18n"
 )
 
 func FuncMap(loc *i18n.I18n) template.FuncMap {

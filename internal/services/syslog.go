@@ -7,8 +7,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
-	"github.com/KilimcininKorOglu/home-router/internal/netutil"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
 )
 
 type SyslogService struct {
@@ -32,14 +32,14 @@ func (s *SyslogService) RenderConfig() (string, error) {
 	return buf.String(), nil
 }
 
-// RenderToDisk renders /etc/rsyslog.d/50-home-router.conf without reloading.
+// RenderToDisk renders /etc/rsyslog.d/50-lankeeper.conf without reloading.
 // Suitable for install-time invocation.
 func (s *SyslogService) RenderToDisk(ctx context.Context) error {
 	rendered, err := s.RenderConfig()
 	if err != nil {
 		return err
 	}
-	confPath := "/etc/rsyslog.d/50-home-router.conf"
+	confPath := "/etc/rsyslog.d/50-lankeeper.conf"
 	if err := netutil.WriteFile(confPath, []byte(rendered), 0o644); err != nil {
 		return fmt.Errorf("write rsyslog config: %w", err)
 	}

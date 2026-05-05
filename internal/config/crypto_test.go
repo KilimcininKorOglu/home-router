@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
 )
 
 func TestEncryptDecryptRoundTrip(t *testing.T) {

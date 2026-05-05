@@ -1,4 +1,4 @@
-# Home Router Software — Implementation Plan (Go + HTMX)
+# LANKeeper Software — Implementation Plan (Go + HTMX)
 
 ## Context
 
@@ -47,15 +47,15 @@ Turkcell Superonline'ın ISP modemleri bufferbloat sorununa neden oluyor ve 1 Gb
 Python'daki iki ayrı process (agent + web) yerine, Go'da **tek binary iki modda** çalışır:
 
 ```
-home-router
-├── home-router serve    → Web sunucu (unprivileged, capability: CAP_NET_BIND_SERVICE)
-└── home-router agent    → Privileged agent (root, UDS listener)
+lankeeper
+├── lankeeper serve    → Web sunucu (unprivileged, capability: CAP_NET_BIND_SERVICE)
+└── lankeeper agent    → Privileged agent (root, UDS listener)
 ```
 
 ```
 ┌─────────────────────────────┐     ┌──────────────────────────────┐
-│  home-router serve          │     │  home-router agent           │
-│  User: homerouter           │────▶│  User: root                  │
+│  lankeeper serve          │     │  lankeeper agent           │
+│  User: lankeeper           │────▶│  User: root                  │
 │  net/http + HTMX            │ UDS │  Unix Socket IPC             │
 │  Port 8443 (LAN only)       │     │  Op Whitelist Dispatcher     │
 │  SSE for real-time updates   │     │  goroutine per operation     │
@@ -68,8 +68,8 @@ home-router
 
 - **Web process** (unprivileged) asla `exec.Command` ile root komut çalıştırmaz
 - **Agent process** (root) strict op whitelist ile yalnızca bilinen işlemleri yürütür
-- IPC: Unix domain socket (`/run/home-router/agent.sock`) + JSON-RPC 2.0
-- Tek binary: `go build -o home-router ./cmd/home-router`
+- IPC: Unix domain socket (`/run/lankeeper/agent.sock`) + JSON-RPC 2.0
+- Tek binary: `go build -o lankeeper ./cmd/lankeeper`
 
 ### 2. HTMX + Server-Side Rendering
 
@@ -563,7 +563,7 @@ Web UI her zaman HTTPS üzerinden çalışır. Üç mod desteklenir:
 **Self-signed (varsayılan):**
 - İlk başlatmada Go `crypto/x509` + `crypto/ecdsa` (P-256) ile otomatik üretilir
 - SAN: LAN IP + hostname + `*.local` — tarayıcı uyarısı verir ama çalışır
-- 10 yıl geçerlilik, `/var/lib/home-router/tls/` altında saklanır
+- 10 yıl geçerlilik, `/var/lib/lankeeper/tls/` altında saklanır
 - Yenileme: web UI'dan tek tıkla yeni cert üret
 
 **mkcert (LAN kullanımı):**
@@ -638,9 +638,9 @@ type Config struct {
 ## Dizin Yapısı
 
 ```
-home-router/
+lankeeper/
 ├── cmd/
-│   └── home-router/
+│   └── lankeeper/
 │       └── main.go               # CLI entry point (serve | agent)
 ├── internal/
 │   ├── agent/
@@ -789,9 +789,9 @@ home-router/
 │       └── nas.yaml              # Boş NAS config
 ├── deploy/
 │   ├── systemd/
-│   │   ├── home-router.target    # Orchestration target
-│   │   ├── home-router-agent.service
-│   │   └── home-router-web.service
+│   │   ├── lankeeper.target    # Orchestration target
+│   │   ├── lankeeper-agent.service
+│   │   └── lankeeper-web.service
 │   ├── install.sh                # Tam kurulum scripti (Debian 12 üzerine)
 │   ├── setup-interfaces.sh       # udev kuralları + NIC isimlendirme
 │   ├── factory-reset.sh          # Fabrika ayarlarına dönüş
@@ -851,7 +851,7 @@ Harici kaynak yüklenmesini CSP header ile de zorla engelle — XSS ile bile dı
 
 ```yaml
 system:
-  hostname: "home-router"
+  hostname: "lankeeper"
   timezone: "Europe/Istanbul"
   language: "tr"                         # tr | en (varsayılan dil, cookie override eder)
   adminPasswordHash: "$2a$12$..."       # bcrypt
@@ -863,10 +863,10 @@ system:
     certFile: ""                         # Custom sertifika yolu (boş = otomatik)
     keyFile: ""                          # Custom anahtar yolu (boş = otomatik)
     selfSigned:
-      cn: "home-router.lan"              # Common Name
+      cn: "lankeeper.lan"              # Common Name
       validDays: 3650                    # Geçerlilik süresi (10 yıl)
       sans:                              # Subject Alternative Names
-        - "home-router.lan"
+        - "lankeeper.lan"
         - "10.10.10.1"
         - "router.local"
     acme:                                  # Let's Encrypt (ACME)
@@ -1375,7 +1375,7 @@ Go'da HTMX ile iki tür endpoint var: **sayfa** (tam HTML) ve **partial** (HTML 
 ## Go Bağımlılıkları (go.mod)
 
 ```
-module github.com/user/home-router
+module github.com/user/lankeeper
 
 go 1.23
 
@@ -1425,12 +1425,12 @@ apt install -y \
 
 ```makefile
 # Makefile
-BINARY  := home-router
+BINARY  := lankeeper
 VERSION := $(shell git describe --tags --always)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
 build:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/home-router
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/lankeeper
 
 test:
 	go test ./... -race -count=1
@@ -1439,8 +1439,8 @@ lint:
 	golangci-lint run
 
 deploy: build
-	scp $(BINARY) router:/opt/home-router/
-	ssh router "systemctl restart home-router.target"
+	scp $(BINARY) router:/opt/lankeeper/
+	ssh router "systemctl restart lankeeper.target"
 ```
 
 ---
@@ -1535,7 +1535,7 @@ deploy: build
 Oluşturulacak dosyalar:
 - `go.mod`, `go.sum`
 - `Makefile`
-- `cmd/home-router/main.go` — CLI: `serve` ve `agent` subcommand'ları
+- `cmd/lankeeper/main.go` — CLI: `serve` ve `agent` subcommand'ları
 - `internal/agent/server.go` — Root agent: UDS dinleyici, JSON-RPC 2.0 dispatcher
 - `internal/agent/client.go` — Agent IPC client (web'den kullanılır)
 - `internal/agent/operations.go` — Op whitelist registry
@@ -1551,9 +1551,9 @@ Oluşturulacak dosyalar:
 - `web/locales/tr.json` — Türkçe çeviriler (tüm anahtarlar)
 - `web/locales/en.json` — İngilizce çeviriler (tüm anahtarlar)
 - `configs/defaults/router.yaml` — Varsayılan config dosyası
-- `deploy/systemd/home-router-agent.service`
-- `deploy/systemd/home-router-web.service`
-- `deploy/systemd/home-router.target`
+- `deploy/systemd/lankeeper-agent.service`
+- `deploy/systemd/lankeeper-web.service`
+- `deploy/systemd/lankeeper.target`
 - `deploy/install.sh`
 
 Adımlar:
@@ -1572,18 +1572,18 @@ Adımlar:
 13. ✅ **`install.sh` — Tam kapsamlı kurulum scripti:**
     - Root kontrolü + Debian 12 doğrulama
     - Sistem bağımlılıkları: `apt install` ile tüm paketler (nftables, wireguard-tools, unbound, dnsmasq, chrony, samba, openvpn, easy-rsa, rsyslog, ppp, mkcert, wide-dhcpv6-client, qrencode, smartmontools, mdadm)
-    - `homerouter` sistem kullanıcısı oluştur (nologin, /opt/home-router home)
-    - Binary'yi `/usr/local/bin/home-router` altına kopyala + `chmod +x`
+    - `lankeeper` sistem kullanıcısı oluştur (nologin, /opt/lankeeper home)
+    - Binary'yi `/usr/local/bin/lankeeper` altına kopyala + `chmod +x`
     - systemd unit dosyalarını `/etc/systemd/system/` altına yerleştir + `systemctl enable`
     - udev rules: NIC isimlendirme (MAC tabanlı), USB tethering RNDIS → `/etc/udev/rules.d/`
-    - Config dizini: `/etc/home-router/` oluştur, varsayılan YAML config'leri kopyala
-    - Veri dizini: `/var/lib/home-router/` (TLS sertifikaları, credentials)
-    - Log dizini: `/var/log/home-router/`, `/var/log/unbound/`
-    - sysctl parametreleri: `/etc/sysctl.d/99-home-router.conf` (ip_forward, rp_filter, syncookies, ipv6 forwarding)
+    - Config dizini: `/etc/lankeeper/` oluştur, varsayılan YAML config'leri kopyala
+    - Veri dizini: `/var/lib/lankeeper/` (TLS sertifikaları, credentials)
+    - Log dizini: `/var/log/lankeeper/`, `/var/log/unbound/`
+    - sysctl parametreleri: `/etc/sysctl.d/99-lankeeper.conf` (ip_forward, rp_filter, syncookies, ipv6 forwarding)
     - İlk admin şifresi: interaktif `read -s` ile al → bcrypt hash → config'e yaz
     - İlk TLS sertifikası: self-signed otomatik üretim
     - Unbound/dnsmasq/chrony başlangıç config'leri render
-    - `systemctl start home-router.target`
+    - `systemctl start lankeeper.target`
     - Kurulum sonrası bilgi: Web UI adresi, SSH notları
 14. ✅ Unit test: agent IPC round-trip + i18n T() fonksiyonu + eksik anahtar fallback
 
@@ -1631,7 +1631,7 @@ Adımlar:
    - `config/tls.go`: TLS modu okuma (self-signed | mkcert | acme)
    - **Self-signed (varsayılan):** ilk başlatmada Go `crypto/ecdsa` (P-256) + `crypto/x509` ile otomatik cert üret
      - SAN: config'deki hostname + LAN IP + `*.local`
-     - Sertifika: `/var/lib/home-router/tls/server.crt` + `server.key`
+     - Sertifika: `/var/lib/lankeeper/tls/server.crt` + `server.key`
      - Geçerlilik: config'den (`selfSigned.validDays`, varsayılan 3650)
    - **mkcert:** `exec.Command("mkcert")` ile sertifika oluştur
      - `mkcert -cert-file {crt} -key-file {key} {hostnames...}`
@@ -1666,7 +1666,7 @@ Adımlar:
 15. ✅ **Tüm template'lerde sabit metin yok** — her label, buton, başlık `{{ t }}` fonksiyonu ile
 
 Manuel doğrulama:
-- **TLS self-signed:** ilk başlatmada sertifika otomatik üretildi mi (`/var/lib/home-router/tls/`)
+- **TLS self-signed:** ilk başlatmada sertifika otomatik üretildi mi (`/var/lib/lankeeper/tls/`)
 - `curl -k https://10.10.10.1:8443/login` → login sayfası dönüyor mu
 - **TLS protokol:** `openssl s_client -connect 10.10.10.1:8443` → TLS 1.2+ kullanılıyor mu
 - **mkcert:** mod değiştir → mkcert ile sertifika üret → CA indir → tarayıcıda uyarı yok mu
@@ -2368,7 +2368,7 @@ Adımlar:
      - Kalan diskler dokunulmaz — NAS için web UI'dan yapılandırılır
    - **Disk bölümleme:** tek disk, `atomic` recipe (boot + swap + root)
    - Paket seçimi: `standard`, `ssh-server` (minimal, GUI yok)
-   - Root hesabı devre dışı, `homerouter` kullanıcısı oluştur
+   - Root hesabı devre dışı, `lankeeper` kullanıcısı oluştur
    - `late_command`: `post-install.sh`'ı chroot içinde çalıştır
 
 3. ✅ **Post-install scripti (`post-install.sh`):**
@@ -2380,12 +2380,12 @@ Adımlar:
    - Varsayılan config dosyalarını yerleştir
    - sysctl parametreleri
    - İlk TLS sertifikası (self-signed)
-   - İlk boot'ta web UI setup wizard için flag oluştur (`/var/lib/home-router/.first-boot`)
+   - İlk boot'ta web UI setup wizard için flag oluştur (`/var/lib/lankeeper/.first-boot`)
    - GRUB: RAID-1 aware, degraded boot allowed
 
 4. ✅ **ISO build scripti (`build-iso.sh`):**
    - Girdi: resmi Debian 12 netinst ISO + Go binary (cross-compile edilmiş)
-   - Çıktı: `home-router-installer.iso` (custom preseed + binary gömülü)
+   - Çıktı: `lankeeper-installer.iso` (custom preseed + binary gömülü)
    - İşlem:
      - Debian ISO'yu aç (`xorriso` veya `bsdtar`)
      - `preseed.cfg` + `post-install.sh` + Go binary'yi ISO'ya ekle
@@ -2396,7 +2396,7 @@ Adımlar:
    - CI/CD: GitHub Actions'da ISO build (release artifact olarak)
 
 5. ✅ **İlk Boot Setup Wizard:**
-   - `/var/lib/home-router/.first-boot` dosyası varsa web UI'da setup wizard göster
+   - `/var/lib/lankeeper/.first-boot` dosyası varsa web UI'da setup wizard göster
    - **İlk boot'ta bridge-based erişim:**
      - `.first-boot` flag'i aktifken TÜM fiziksel NIC'ler `br0` bridge'e eklenir
      - Bridge'e tek IP atanır: `10.10.10.1/24` — subnet çakışması yok, tüm portlar aynı LAN

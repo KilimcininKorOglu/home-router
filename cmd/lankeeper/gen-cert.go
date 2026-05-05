@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
 )
 
 func runGenCert() error {
 	fs := flag.NewFlagSet("gen-cert", flag.ExitOnError)
-	configPath := fs.String("config", "/etc/home-router/router.yaml", "config file path")
-	dataDir := fs.String("data-dir", "/var/lib/home-router", "data directory (cert is written under <data-dir>/tls)")
+	configPath := fs.String("config", "/etc/lankeeper/router.yaml", "config file path")
+	dataDir := fs.String("data-dir", "/var/lib/lankeeper", "data directory (cert is written under <data-dir>/tls)")
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		return err
 	}

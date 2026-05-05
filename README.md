@@ -1,4 +1,4 @@
-# Home Router
+# LANKeeper
 
 A complete DIY home router, gateway, and NAS management software built in Go. Designed to replace ISP-provided modems with full control over networking, security, and media services. Ships as a single static binary with an embedded web interface.
 
@@ -46,8 +46,8 @@ Any x86_64 system with at least two Ethernet ports. Reference build:
 ### Build
 
 ```bash
-git clone https://github.com/KilimcininKorOglu/home-router.git
-cd home-router
+git clone https://github.com/KilimcininKorOglu/lankeeper.git
+cd lankeeper
 make build
 ```
 
@@ -56,8 +56,8 @@ make build
 ```bash
 # Cross-compile and install
 make cross
-scp home-router root@<router-ip>:/tmp/
-ssh root@<router-ip> bash /tmp/deploy/install.sh /tmp/home-router
+scp lankeeper root@<router-ip>:/tmp/
+ssh root@<router-ip> bash /tmp/deploy/install.sh /tmp/lankeeper
 ```
 
 ### ISO Installer (Offline)
@@ -72,7 +72,7 @@ make iso-all \
   DEBIAN_ARM64_ISO=/path/to/debian-12-arm64-netinst.iso
 ```
 
-Generated artifacts are written under `dist/`: Linux binaries, per-architecture offline package pools, and `home-router-installer-<arch>.iso`. The installer embeds all required packages, so no internet connection is required during install.
+Generated artifacts are written under `dist/`: Linux binaries, per-architecture offline package pools, and `lankeeper-installer-<arch>.iso`. The installer embeds all required packages, so no internet connection is required during install.
 
 The preseed installer asks 7 questions: language/locale, keyboard layout, timezone, hostname, web UI admin password, root password, and disk selection.
 
@@ -84,7 +84,7 @@ The preseed installer asks 7 questions: language/locale, keyboard layout, timezo
                     +-------------+-------------+
                                   | HTTPS :8443
                     +-------------v-------------+
-                    |    home-router serve       |
+                    |    lankeeper serve       |
                     |    (unprivileged user)     |
                     |                           |
                     |  Web Server + Auth + SSE   |
@@ -94,7 +94,7 @@ The preseed installer asks 7 questions: language/locale, keyboard layout, timezo
                                   | JSON-RPC 2.0
                                   | Unix Domain Socket
                     +-------------v-------------+
-                    |    home-router agent       |
+                    |    lankeeper agent       |
                     |    (root)                  |
                     |                           |
                     |  Op Whitelist Dispatcher   |
@@ -141,7 +141,7 @@ Pages: Dashboard, Network, Firewall, VPN (WireGuard), OpenVPN, Routing, DNS, DHC
 
 ## Configuration
 
-Main config file: `/etc/home-router/router.yaml`
+Main config file: `/etc/lankeeper/router.yaml`
 
 All config structs are defined in `internal/config/config.go`. The file is written atomically (tmp -> fsync -> rename) and credentials are encrypted with AES-256-GCM.
 
@@ -170,7 +170,7 @@ go vet ./...              # Static analysis
 ### Project Structure
 
 ```
-cmd/home-router/        CLI entry point (serve, agent, version, hash-password, gen-cert, render-configs)
+cmd/lankeeper/          CLI entry point (serve, agent, version, hash-password, gen-cert, render-configs)
 internal/
   agent/                JSON-RPC 2.0 IPC (server + client)
   config/               YAML config structs, crypto, TLS
@@ -195,9 +195,9 @@ deploy/                 install.sh, systemd units, preseed ISO builder
 ### Systemd Services
 
 ```
-home-router.target
-  |- home-router-agent.service   (root, UDS listener)
-  |- home-router-web.service     (unprivileged, HTTPS)
+lankeeper.target
+  |- lankeeper-agent.service   (root, UDS listener)
+  |- lankeeper-web.service     (unprivileged, HTTPS)
 ```
 
 ### System Dependencies (installed by install.sh)

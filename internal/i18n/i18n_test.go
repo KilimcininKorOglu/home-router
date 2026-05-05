@@ -4,7 +4,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/KilimcininKorOglu/home-router/internal/i18n"
+	"github.com/KilimcininKorOglu/lankeeper/internal/i18n"
 )
 
 func newTestI18n(t *testing.T) *i18n.I18n {

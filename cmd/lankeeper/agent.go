@@ -10,12 +10,12 @@ import (
 	"os/user"
 	"syscall"
 
-	"github.com/KilimcininKorOglu/home-router/internal/agent"
+	"github.com/KilimcininKorOglu/lankeeper/internal/agent"
 )
 
 func runAgent() error {
 	fs := flag.NewFlagSet("agent", flag.ExitOnError)
-	socketPath := fs.String("socket", "/run/home-router/agent.sock", "UDS listen path")
+	socketPath := fs.String("socket", "/run/lankeeper/agent.sock", "UDS listen path")
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		return err
 	}
@@ -34,7 +34,7 @@ func runAgent() error {
 	srv := agent.NewServer(*socketPath)
 	agent.RegisterBuiltinOps(srv)
 
-	log.Printf("home-router agent starting (socket=%s)", *socketPath)
+	log.Printf("lankeeper agent starting (socket=%s)", *socketPath)
 
 	errCh := make(chan error, 1)
 	go func() {

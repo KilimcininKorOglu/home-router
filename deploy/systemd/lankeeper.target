@@ -1,8 +1,8 @@
 [Unit]
-Description=Home Router Services
+Description=LANKeeper Services
 After=network-online.target
 Wants=network-online.target
-Wants=home-router-agent.service home-router-web.service
+Wants=lankeeper-agent.service lankeeper-web.service
 
 [Install]
 WantedBy=multi-user.target

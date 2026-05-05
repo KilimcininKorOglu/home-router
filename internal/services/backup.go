@@ -16,7 +16,7 @@ import (
 
 	"golang.org/x/crypto/scrypt"
 
-	"github.com/KilimcininKorOglu/home-router/internal/netutil"
+	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
 )
 
 type BackupService struct {
@@ -29,7 +29,7 @@ func NewBackupService(configDir string) *BackupService {
 
 func (s *BackupService) Export(ctx context.Context, outputPath, passphrase string) error {
 	if outputPath == "" {
-		outputPath = fmt.Sprintf("/tmp/home-router-backup-%s.tar.gz",
+		outputPath = fmt.Sprintf("/tmp/lankeeper-backup-%s.tar.gz",
 			time.Now().Format("20060102-150405"))
 	}
 

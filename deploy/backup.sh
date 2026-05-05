@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKUP_DIR="/var/lib/home-router/backups"
-CONFIG_DIR="/etc/home-router"
+BACKUP_DIR="/var/lib/lankeeper/backups"
+CONFIG_DIR="/etc/lankeeper"
 DATE=$(date +%Y%m%d-%H%M%S)
-BACKUP_FILE="$BACKUP_DIR/home-router-backup-$DATE.tar.gz"
+BACKUP_FILE="$BACKUP_DIR/lankeeper-backup-$DATE.tar.gz"
 
 mkdir -p "$BACKUP_DIR"
 
 tar czf "$BACKUP_FILE" \
     -C / \
-    etc/home-router \
+    etc/lankeeper \
     etc/unbound \
     etc/dnsmasq.d \
     etc/chrony \

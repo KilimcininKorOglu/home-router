@@ -3,7 +3,7 @@ package netutil_test
 import (
 	"testing"
 
-	"github.com/KilimcininKorOglu/home-router/internal/netutil"
+	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
 )
 
 func TestDetectInterfaces(t *testing.T) {

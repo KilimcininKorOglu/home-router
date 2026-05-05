@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KilimcininKorOglu/home-router/internal/services"
+	"github.com/KilimcininKorOglu/lankeeper/internal/services"
 )
 
 func TestNewMonitorService(t *testing.T) {

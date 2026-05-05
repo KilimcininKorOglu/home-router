@@ -32,7 +32,7 @@ func main() {
 		}
 	case "hash-password":
 		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: home-router hash-password <password>")
+			fmt.Fprintln(os.Stderr, "usage: lankeeper hash-password <password>")
 			os.Exit(1)
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(os.Args[2]), bcrypt.DefaultCost)
@@ -52,7 +52,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "version":
-		fmt.Printf("home-router %s (commit: %s, built: %s)\n", version, commit, date)
+		fmt.Printf("lankeeper %s (commit: %s, built: %s)\n", version, commit, date)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -63,10 +63,10 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Fprintf(os.Stderr, `home-router — DIY home router management software
+	fmt.Fprintf(os.Stderr, `lankeeper — DIY home router management software
 
 Usage:
-  home-router <command> [options]
+  lankeeper <command> [options]
 
 Commands:
   serve          Start web server (unprivileged)

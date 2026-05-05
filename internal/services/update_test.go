@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/KilimcininKorOglu/home-router/internal/services"
+	"github.com/KilimcininKorOglu/lankeeper/internal/services"
 )
 
 func TestCompareSemver(t *testing.T) {
@@ -33,7 +33,7 @@ func TestCompareSemver(t *testing.T) {
 }
 
 func TestNewUpdateService(t *testing.T) {
-	t.Setenv("HOME_ROUTER_UPDATE_STATE", t.TempDir()+"/update-state.json")
+	t.Setenv("LANKEEPER_UPDATE_STATE", t.TempDir()+"/update-state.json")
 
 	svc := services.NewUpdateService("v1.0.0", "abc1234", "2026-01-01", nil)
 	if svc == nil {
@@ -53,7 +53,7 @@ func TestNewUpdateService(t *testing.T) {
 }
 
 func TestUpdateServiceNoPending(t *testing.T) {
-	t.Setenv("HOME_ROUTER_UPDATE_STATE", t.TempDir()+"/update-state.json")
+	t.Setenv("LANKEEPER_UPDATE_STATE", t.TempDir()+"/update-state.json")
 
 	svc := services.NewUpdateService("v1.0.0", "abc", "2026-01-01", nil)
 	if svc.HasPendingUpdate() {

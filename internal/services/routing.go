@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KilimcininKorOglu/home-router/internal/config"
-	"github.com/KilimcininKorOglu/home-router/internal/netutil"
+	"github.com/KilimcininKorOglu/lankeeper/internal/config"
+	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
 )
 
 type RoutingService struct {
