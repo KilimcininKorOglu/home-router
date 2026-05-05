@@ -1,9 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-# nullglob: unmatched globs expand to empty (not literal). Prevents
-# `cp /path/*.yaml dest/` from failing when no files match.
-shopt -s nullglob
+#!/bin/sh
+set -eu
 
 BINARY_NAME="home-router"
 INSTALL_DIR="/usr/local/bin"
@@ -18,7 +14,7 @@ echo "=== Home Router Kurulum Sonrası / Post-Install ==="
 # Install packages from the local ISO repo copied by late_command. Keep apt
 # pointed only at this flat repo so an offline router install never prompts
 # for a Debian CD label or network mirror.
-if [[ -d /tmp/pool-extra ]] && [[ -f /tmp/pool-extra/Packages ]]; then
+if [ -d /tmp/pool-extra ] && [ -f /tmp/pool-extra/Packages ]; then
     cp /etc/apt/sources.list /etc/apt/sources.list.home-router.bak 2>/dev/null || true
     mkdir -p /etc/apt/sources.list.d
     rm -f /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources
@@ -38,9 +34,9 @@ fi
 
 # Set timezone chosen in the installer. This avoids depending on d-i's
 # time/zone template availability during CD preseed loading.
-if [[ -s /tmp/timezone.txt ]]; then
+if [ -s /tmp/timezone.txt ]; then
     ROUTER_TZ=$(cat /tmp/timezone.txt)
-    if [[ -f "/usr/share/zoneinfo/$ROUTER_TZ" ]]; then
+    if [ -f "/usr/share/zoneinfo/$ROUTER_TZ" ]; then
         echo "$ROUTER_TZ" > /etc/timezone
         ln -sf "/usr/share/zoneinfo/$ROUTER_TZ" /etc/localtime
     else
@@ -52,7 +48,7 @@ fi
 # d-i creates the homerouter user via passwd/make-user=true. If for some
 # reason the user is missing here, abort — installing the service with no
 # owner is worse than failing loudly.
-if ! id "$SERVICE_USER" &>/dev/null; then
+if ! id "$SERVICE_USER" >/dev/null 2>&1; then
     echo "HATA / ERROR: $SERVICE_USER kullanıcısı yok / user $SERVICE_USER missing" >&2
     exit 1
 fi
@@ -106,7 +102,7 @@ UDEV
 udevadm control --reload-rules 2>/dev/null || true
 
 # DHCP-DNS update helper script
-if [[ -f /tmp/dhcp-dns-update.sh ]]; then
+if [ -f /tmp/dhcp-dns-update.sh ]; then
     mkdir -p /usr/local/lib/home-router
     cp /tmp/dhcp-dns-update.sh /usr/local/lib/home-router/
     chmod +x /usr/local/lib/home-router/dhcp-dns-update.sh
@@ -115,11 +111,11 @@ fi
 # Sysconf templates — service code calls
 # template.ParseFiles("configs/sysconf/...") relative to CWD, so mirror
 # that path under $DATA_DIR. render-configs chdirs to $DATA_DIR.
-if [[ -d /tmp/configs/sysconf ]]; then
-    sysconf_files=( /tmp/configs/sysconf/*.tmpl )
-    if [[ ${#sysconf_files[@]} -gt 0 ]]; then
+if [ -d /tmp/configs/sysconf ]; then
+    set -- /tmp/configs/sysconf/*.tmpl
+    if [ -e "$1" ]; then
         mkdir -p "$DATA_DIR/configs/sysconf"
-        cp "${sysconf_files[@]}" "$DATA_DIR/configs/sysconf/"
+        cp "$@" "$DATA_DIR/configs/sysconf/"
         chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR/configs" 2>/dev/null || true
     else
         echo "UYARI / WARN: sysconf şablonları boş / sysconf templates empty"
@@ -129,14 +125,14 @@ fi
 # systemd units — copied from /tmp/systemd which late_command populated
 # from /cdrom/systemd. Fail loudly if missing rather than silently using
 # divergent inline fallbacks.
-unit_services=( /tmp/systemd/*.service )
-unit_targets=( /tmp/systemd/*.target )
-if [[ ! -d /tmp/systemd ]] || [[ ${#unit_services[@]} -eq 0 ]]; then
+set -- /tmp/systemd/*.service
+if [ ! -d /tmp/systemd ] || [ ! -e "$1" ]; then
     echo "HATA / ERROR: systemd unit dosyaları bulunamadı (/tmp/systemd) / systemd unit files missing" >&2
     exit 1
 fi
-cp "${unit_services[@]}" "$SYSTEMD_DIR/"
-[[ ${#unit_targets[@]} -gt 0 ]] && cp "${unit_targets[@]}" "$SYSTEMD_DIR/"
+cp "$@" "$SYSTEMD_DIR/"
+set -- /tmp/systemd/*.target
+[ -e "$1" ] && cp "$@" "$SYSTEMD_DIR/"
 
 # Enable services. systemctl in d-i chroot can fail in unusual setups; tolerate.
 systemctl daemon-reload 2>/dev/null || true
@@ -145,10 +141,10 @@ systemctl enable home-router.target 2>/dev/null || true
 # Default config — copy YAML defaults from ISO. Without these, router.yaml
 # would never exist and the admin password / hostname sed steps below would
 # silently no-op.
-if [[ ! -f "$CONFIG_DIR/router.yaml" ]]; then
-    default_yamls=( /tmp/configs/defaults/*.yaml )
-    if [[ ${#default_yamls[@]} -gt 0 ]]; then
-        cp "${default_yamls[@]}" "$CONFIG_DIR/"
+if [ ! -f "$CONFIG_DIR/router.yaml" ]; then
+    set -- /tmp/configs/defaults/*.yaml
+    if [ -e "$1" ]; then
+        cp "$@" "$CONFIG_DIR/"
         chmod 640 "$CONFIG_DIR"/*.yaml
         chown root:"$SERVICE_USER" "$CONFIG_DIR"/*.yaml 2>/dev/null || true
     else
@@ -157,15 +153,15 @@ if [[ ! -f "$CONFIG_DIR/router.yaml" ]]; then
 fi
 
 # Set admin password from installer
-if [[ -f /tmp/admin-password.txt ]]; then
+if [ -f /tmp/admin-password.txt ]; then
     ADMIN_PASS=$(cat /tmp/admin-password.txt)
-    if [[ -z "$ADMIN_PASS" ]]; then
+    if [ -z "$ADMIN_PASS" ]; then
         echo "UYARI / WARN: Yönetici şifresi boş, ayarlanmadı / Admin password empty, not set"
     else
         ADMIN_HASH=$("$INSTALL_DIR/$BINARY_NAME" hash-password "$ADMIN_PASS" 2>/dev/null || echo "")
-        if [[ -z "$ADMIN_HASH" ]]; then
+        if [ -z "$ADMIN_HASH" ]; then
             echo "HATA / ERROR: Şifre hash'lenemedi / Failed to hash admin password"
-        elif [[ ! -f "$CONFIG_DIR/router.yaml" ]]; then
+        elif [ ! -f "$CONFIG_DIR/router.yaml" ]; then
             echo "HATA / ERROR: router.yaml yok, şifre yazılamadı / router.yaml missing, password not written"
         else
             sed -i "s|adminPasswordHash:.*|adminPasswordHash: \"$ADMIN_HASH\"|" "$CONFIG_DIR/router.yaml"
@@ -177,31 +173,31 @@ fi
 
 # Set hostname — prefer the user-supplied value from the early_command
 # debconf prompt over the system hostname (which is hermes by default).
-if [[ -f /tmp/hostname.txt ]]; then
+if [ -f /tmp/hostname.txt ]; then
     HOSTNAME_VAL=$(cat /tmp/hostname.txt)
     rm -f /tmp/hostname.txt
 else
     HOSTNAME_VAL=$(hostname)
 fi
-if [[ -n "$HOSTNAME_VAL" && -f "$CONFIG_DIR/router.yaml" ]]; then
+if [ -n "$HOSTNAME_VAL" ] && [ -f "$CONFIG_DIR/router.yaml" ]; then
     sed -i "s|hostname:.*|hostname: \"$HOSTNAME_VAL\"|" "$CONFIG_DIR/router.yaml"
     hostnamectl set-hostname "$HOSTNAME_VAL" 2>/dev/null || \
         echo "$HOSTNAME_VAL" > /etc/hostname
 fi
 
 # Propagate timezone selected during d-i to router.yaml.
-if [[ -f /etc/timezone ]] && [[ -f "$CONFIG_DIR/router.yaml" ]]; then
+if [ -f /etc/timezone ] && [ -f "$CONFIG_DIR/router.yaml" ]; then
     TZ_VAL=$(cat /etc/timezone)
-    if [[ -n "$TZ_VAL" ]]; then
+    if [ -n "$TZ_VAL" ]; then
         sed -i "s|timezone:.*|timezone: \"$TZ_VAL\"|" "$CONFIG_DIR/router.yaml"
     fi
 fi
 
 # Propagate locale to router.yaml language field. The web UI only ships
 # tr and en; pick "tr" for Turkish locales, otherwise default to "en".
-if [[ -f "$CONFIG_DIR/router.yaml" ]]; then
+if [ -f "$CONFIG_DIR/router.yaml" ]; then
     LOCALE_VAL=""
-    if [[ -f /etc/default/locale ]]; then
+    if [ -f /etc/default/locale ]; then
         LOCALE_VAL=$(. /etc/default/locale 2>/dev/null; echo "${LANG:-}")
     fi
     case "$LOCALE_VAL" in
@@ -288,7 +284,7 @@ grep -q '^PasswordAuthentication ' /etc/ssh/sshd_config || echo "PasswordAuthent
 # Generate initial self-signed TLS certificate so the web service can start
 # immediately on first boot. The dedicated `gen-cert` subcommand writes the
 # cert synchronously and exits — no background process, no sleep race.
-if [[ ! -f "$DATA_DIR/tls/server.crt" ]] && [[ -f "$CONFIG_DIR/router.yaml" ]]; then
+if [ ! -f "$DATA_DIR/tls/server.crt" ] && [ -f "$CONFIG_DIR/router.yaml" ]; then
     if "$INSTALL_DIR/$BINARY_NAME" gen-cert \
             --config "$CONFIG_DIR/router.yaml" \
             --data-dir "$DATA_DIR" >/dev/null; then
@@ -303,7 +299,7 @@ fi
 
 # Tüm servis template'lerini /etc/ altına render et. Native Debian servisleri
 # ilk boot'ta home-router config'leriyle başlasın.
-if [[ -f "$CONFIG_DIR/router.yaml" ]] && [[ -d "$DATA_DIR/configs/sysconf" ]]; then
+if [ -f "$CONFIG_DIR/router.yaml" ] && [ -d "$DATA_DIR/configs/sysconf" ]; then
     if ! "$INSTALL_DIR/$BINARY_NAME" render-configs \
             --config "$CONFIG_DIR/router.yaml" \
             --cwd "$DATA_DIR"; then
