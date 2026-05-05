@@ -25,7 +25,7 @@ if [[ -d /tmp/pool-extra ]] && [[ -f /tmp/pool-extra/Packages ]]; then
     echo "deb [trusted=yes] file:/tmp/pool-extra ./" > /etc/apt/sources.list
     apt-get update -qq
     apt-get install -y -qq \
-        ppp pppoe nftables wireguard-tools openvpn easy-rsa \
+        bash ppp pppoe nftables wireguard-tools openvpn easy-rsa \
         samba samba-common-bin smartmontools mdadm iproute2 \
         unbound dnsmasq rsyslog chrony qrencode \
         wide-dhcpv6-client curl jq hdparm openssh-server

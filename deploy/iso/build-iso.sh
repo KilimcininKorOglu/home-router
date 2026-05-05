@@ -55,7 +55,7 @@ if [[ "$APT_ARCH" != "$ARCH" ]]; then
 fi
 
 PACKAGES=(
-    ppp pppoe nftables wireguard-tools openvpn easy-rsa
+    bash ppp pppoe nftables wireguard-tools openvpn easy-rsa
     samba samba-common-bin smartmontools mdadm iproute2
     unbound dnsmasq rsyslog chrony qrencode
     wide-dhcpv6-client curl jq hdparm openssh-server
