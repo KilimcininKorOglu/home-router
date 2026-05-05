@@ -36,7 +36,7 @@ lint:
 	golangci-lint run
 
 clean:
-	rm -rf $(DIST_DIR)
+	find $(DIST_DIR) -mindepth 1 -maxdepth 1 ! -name packages -exec rm -rf {} + 2>/dev/null || true
 
 cross: cross-amd64
 
