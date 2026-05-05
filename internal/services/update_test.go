@@ -1,6 +1,7 @@
 package services_test
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/KilimcininKorOglu/home-router/internal/services"
@@ -32,6 +33,8 @@ func TestCompareSemver(t *testing.T) {
 }
 
 func TestNewUpdateService(t *testing.T) {
+	t.Setenv("HOME_ROUTER_UPDATE_STATE", t.TempDir()+"/update-state.json")
+
 	svc := services.NewUpdateService("v1.0.0", "abc1234", "2026-01-01", nil)
 	if svc == nil {
 		t.Fatal("service should not be nil")
@@ -44,9 +47,14 @@ func TestNewUpdateService(t *testing.T) {
 	if info.Commit != "abc1234" {
 		t.Errorf("commit = %q, want abc1234", info.Commit)
 	}
+	if info.Architecture != runtime.GOARCH {
+		t.Errorf("architecture = %q, want %q", info.Architecture, runtime.GOARCH)
+	}
 }
 
 func TestUpdateServiceNoPending(t *testing.T) {
+	t.Setenv("HOME_ROUTER_UPDATE_STATE", t.TempDir()+"/update-state.json")
+
 	svc := services.NewUpdateService("v1.0.0", "abc", "2026-01-01", nil)
 	if svc.HasPendingUpdate() {
 		t.Error("should not have pending update initially")

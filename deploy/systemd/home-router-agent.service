@@ -18,6 +18,7 @@ ProtectHome=true
 PrivateTmp=true
 NoNewPrivileges=false
 ProtectSystem=full
+ReadWritePaths=/etc/default /boot
 
 [Install]
 WantedBy=home-router.target

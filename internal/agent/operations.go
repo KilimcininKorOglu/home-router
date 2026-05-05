@@ -23,13 +23,13 @@ var allowedCommands = map[string]bool{
 	"dhclient": true, "chpasswd": true, "df": true,
 	"cp": true, "chmod": true, "mv": true, "rm": true, "kill": true,
 	"openssl": true, "usermod": true, "localectl": true, "loadkeys": true,
-	"easyrsa": true, "mkdir": true, "tail": true,
+	"easyrsa": true, "mkdir": true, "tail": true, "update-grub": true,
 }
 
 type pathRuleKind int
 
 const (
-	dirPrefix      pathRuleKind = iota
+	dirPrefix pathRuleKind = iota
 	exactFile
 	filenamePrefix
 )
@@ -51,6 +51,7 @@ var allowedWriteRules = []pathRule{
 	{"/etc/chrony/", dirPrefix},
 	{"/etc/rsyslog.d/", dirPrefix},
 	{"/etc/home-router/", dirPrefix},
+	{"/etc/default/grub.d/", dirPrefix},
 	{"/etc/fstab", exactFile},
 	{"/etc/pppoe-server-options", exactFile},
 	{"/var/log/", dirPrefix},

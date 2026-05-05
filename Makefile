@@ -11,13 +11,15 @@ AMD64_BINARY := $(DIST_DIR)/$(BINARY)-linux-amd64
 ARM64_BINARY := $(DIST_DIR)/$(BINARY)-linux-arm64
 AMD64_ISO := $(DIST_DIR)/$(BINARY)-installer-amd64.iso
 ARM64_ISO := $(DIST_DIR)/$(BINARY)-installer-arm64.iso
+AMD64_RELEASE_DIR := $(DIST_DIR)/release-amd64
+ARM64_RELEASE_DIR := $(DIST_DIR)/release-arm64
 DEBIAN_AMD64_ISO ?= $(DEBIAN_ISO)
 DEBIAN_ARM64_ISO ?=
 DOCKER ?= docker
 ISO_BUILDER_AMD64 ?= home-router-iso-builder-amd64
 ISO_BUILDER_ARM64 ?= home-router-iso-builder-arm64
 
-.PHONY: build test lint clean dev cross cross-amd64 cross-arm64 cross-all install iso iso-amd64 iso-arm64 iso-all docker-builder-amd64 docker-builder-arm64 docker-builders release check
+.PHONY: build test lint clean dev cross cross-amd64 cross-arm64 cross-all install iso iso-amd64 iso-arm64 iso-all docker-builder-amd64 docker-builder-arm64 docker-builders release release-archives release-amd64 release-arm64 release-all checksums check
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/home-router
@@ -76,10 +78,31 @@ iso-arm64: cross-arm64 docker-builder-arm64
 
 iso-all: iso-amd64 iso-arm64
 
-release: cross-amd64
+release: release-archives
+
+release-archives: release-amd64 release-arm64
+	$(MAKE) checksums VERSION=$(VERSION)
+
+release-amd64: cross-amd64
 	mkdir -p dist
-	tar czf dist/$(BINARY)-$(VERSION)-linux-amd64.tar.gz $(AMD64_BINARY) deploy/ configs/ web/locales/
+	mkdir -p $(AMD64_RELEASE_DIR)
+	cp $(AMD64_BINARY) $(AMD64_RELEASE_DIR)/$(BINARY)
+	tar czf dist/$(BINARY)-$(VERSION)-linux-amd64.tar.gz -C $(AMD64_RELEASE_DIR) $(BINARY)
 	@echo "Release archive: dist/$(BINARY)-$(VERSION)-linux-amd64.tar.gz"
+
+release-arm64: cross-arm64
+	mkdir -p dist
+	mkdir -p $(ARM64_RELEASE_DIR)
+	cp $(ARM64_BINARY) $(ARM64_RELEASE_DIR)/$(BINARY)
+	tar czf dist/$(BINARY)-$(VERSION)-linux-arm64.tar.gz -C $(ARM64_RELEASE_DIR) $(BINARY)
+	@echo "Release archive: dist/$(BINARY)-$(VERSION)-linux-arm64.tar.gz"
+
+release-all: release-amd64 release-arm64 iso-all
+	$(MAKE) checksums VERSION=$(VERSION)
+
+checksums:
+	@cd dist && { for f in $(BINARY)-$(VERSION)-linux-*.tar.gz $(BINARY)-installer-*.iso; do [ -f "$$f" ] && shasum -a 256 "$$f"; done; } > SHA256SUMS
+	@echo "Checksums: dist/SHA256SUMS"
 
 check:
 	sudo bash deploy/install.sh --check

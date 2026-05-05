@@ -12,7 +12,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,53 +24,82 @@ import (
 )
 
 type UpdateService struct {
-	currentVersion string
-	currentCommit  string
-	currentDate    string
-	binaryPath     string
-	repoOwner      string
-	repoName       string
-	backup         *BackupService
-	mu             sync.Mutex
-	watchdogCancel context.CancelFunc
-	pendingVersion string
+	currentVersion  string
+	currentCommit   string
+	currentDate     string
+	architecture    string
+	binaryPath      string
+	statePath       string
+	repoOwner       string
+	repoName        string
+	backup          *BackupService
+	mu              sync.Mutex
+	watchdogCancel  context.CancelFunc
+	pendingVersion  string
+	previousVersion string
+	backupBinary    string
 }
 
+const (
+	defaultUpdateStatePath = "/var/lib/home-router/update-state.json"
+	updateConfirmWindow    = 60 * time.Second
+)
+
 func NewUpdateService(version, commit, date string, backup *BackupService) *UpdateService {
-	return &UpdateService{
+	statePath := os.Getenv("HOME_ROUTER_UPDATE_STATE")
+	if statePath == "" {
+		statePath = defaultUpdateStatePath
+	}
+
+	svc := &UpdateService{
 		currentVersion: version,
 		currentCommit:  commit,
 		currentDate:    date,
+		architecture:   runtime.GOARCH,
 		binaryPath:     "/usr/local/bin/home-router",
+		statePath:      statePath,
 		repoOwner:      "KilimcininKorOglu",
 		repoName:       "home-router",
 		backup:         backup,
 	}
+	svc.restorePendingUpdate()
+	return svc
 }
 
 type UpdateInfo struct {
 	Available      bool   `json:"available"`
 	CurrentVersion string `json:"currentVersion"`
 	LatestVersion  string `json:"latestVersion"`
+	Architecture   string `json:"architecture"`
 	ReleaseNotes   string `json:"releaseNotes"`
 	DownloadURL    string `json:"downloadURL"`
 	ChecksumURL    string `json:"checksumURL,omitempty"`
+	AssetName      string `json:"assetName"`
 	PublishedAt    string `json:"publishedAt"`
 	AssetSize      int64  `json:"assetSize"`
 }
 
 type VersionInfo struct {
-	Version string `json:"version"`
-	Commit  string `json:"commit"`
-	Date    string `json:"date"`
+	Version      string `json:"version"`
+	Commit       string `json:"commit"`
+	Date         string `json:"date"`
+	Architecture string `json:"architecture"`
 }
 
 func (s *UpdateService) GetVersionInfo() *VersionInfo {
 	return &VersionInfo{
-		Version: s.currentVersion,
-		Commit:  s.currentCommit,
-		Date:    s.currentDate,
+		Version:      s.currentVersion,
+		Commit:       s.currentCommit,
+		Date:         s.currentDate,
+		Architecture: s.architecture,
 	}
+}
+
+type updateState struct {
+	PendingVersion  string    `json:"pendingVersion"`
+	PreviousVersion string    `json:"previousVersion"`
+	BackupBinary    string    `json:"backupBinary"`
+	AppliedAt       time.Time `json:"appliedAt"`
 }
 
 func (s *UpdateService) HasPendingUpdate() bool {
@@ -84,10 +115,10 @@ func (s *UpdateService) PendingVersion() string {
 }
 
 type ghRelease struct {
-	TagName    string    `json:"tag_name"`
-	Body       string    `json:"body"`
-	Published  time.Time `json:"published_at"`
-	Assets     []ghAsset `json:"assets"`
+	TagName   string    `json:"tag_name"`
+	Body      string    `json:"body"`
+	Published time.Time `json:"published_at"`
+	Assets    []ghAsset `json:"assets"`
 }
 
 type ghAsset struct {
@@ -125,12 +156,15 @@ func (s *UpdateService) CheckForUpdate(ctx context.Context) (*UpdateInfo, error)
 	info := &UpdateInfo{
 		CurrentVersion: s.currentVersion,
 		LatestVersion:  release.TagName,
+		Architecture:   s.architecture,
 		ReleaseNotes:   release.Body,
 		PublishedAt:    release.Published.Format("2006-01-02"),
 	}
 
+	assetNeedle := "linux-" + s.architecture
 	for _, asset := range release.Assets {
-		if strings.Contains(asset.Name, "linux-amd64") && strings.HasSuffix(asset.Name, ".tar.gz") {
+		if strings.Contains(asset.Name, assetNeedle) && strings.HasSuffix(asset.Name, ".tar.gz") {
+			info.AssetName = asset.Name
 			info.DownloadURL = asset.BrowserDownloadURL
 			info.AssetSize = asset.Size
 		}
@@ -149,7 +183,7 @@ func (s *UpdateService) ApplyUpdate(ctx context.Context, info *UpdateInfo) error
 	defer s.mu.Unlock()
 
 	if info.DownloadURL == "" {
-		return fmt.Errorf("no download URL for linux-amd64 asset")
+		return fmt.Errorf("no download URL for linux-%s asset", s.architecture)
 	}
 
 	log.Printf("starting update from %s to %s", s.currentVersion, info.LatestVersion)
@@ -162,7 +196,7 @@ func (s *UpdateService) ApplyUpdate(ctx context.Context, info *UpdateInfo) error
 		}
 	}
 
-	tmpArchive := fmt.Sprintf("/tmp/home-router-update-%s.tar.gz", info.LatestVersion)
+	tmpArchive := filepath.Join("/tmp", safeUpdateFileName(info.AssetName))
 	if err := s.downloadFile(ctx, info.DownloadURL, tmpArchive); err != nil {
 		return fmt.Errorf("download: %w", err)
 	}
@@ -193,22 +227,36 @@ func (s *UpdateService) ApplyUpdate(ctx context.Context, info *UpdateInfo) error
 		return fmt.Errorf("chmod: %w", err)
 	}
 
-	out, err := netutil.RunSimple(ctx, s.binaryPath, "version")
+	out, err := s.runBinaryVersion(ctx)
 	if err != nil || !strings.Contains(out, strings.TrimPrefix(info.LatestVersion, "v")) {
 		log.Printf("version check failed after install: %v (output: %s)", err, out)
 		netutil.Run(ctx, "cp", "-f", backupBinary, s.binaryPath)
 		return fmt.Errorf("version verification failed")
 	}
 
+	state := updateState{
+		PendingVersion:  info.LatestVersion,
+		PreviousVersion: s.currentVersion,
+		BackupBinary:    backupBinary,
+		AppliedAt:       time.Now().UTC(),
+	}
+	if err := s.saveUpdateState(state); err != nil {
+		netutil.Run(ctx, "cp", "-f", backupBinary, s.binaryPath)
+		return fmt.Errorf("save update state: %w", err)
+	}
+
 	s.pendingVersion = info.LatestVersion
+	s.previousVersion = s.currentVersion
+	s.backupBinary = backupBinary
 
 	watchCtx, cancel := context.WithCancel(context.Background())
 	s.watchdogCancel = cancel
 
-	go s.watchdog(watchCtx, backupBinary)
+	go s.watchdog(watchCtx, updateConfirmWindow)
 
 	log.Printf("update to %s applied, waiting for confirmation (60s watchdog)", info.LatestVersion)
 
+	s.updateBootBranding(ctx, info.LatestVersion)
 	netutil.Run(ctx, "systemctl", "restart", "home-router.target")
 
 	return nil
@@ -223,11 +271,17 @@ func (s *UpdateService) ConfirmUpdate(ctx context.Context) error {
 		s.watchdogCancel = nil
 	}
 
-	backupBinary := s.binaryPath + ".bak"
-	os.Remove(backupBinary)
+	if s.backupBinary != "" {
+		netutil.Run(ctx, "rm", "-f", s.backupBinary)
+	}
+	if err := s.clearUpdateState(); err != nil {
+		log.Printf("clear update state failed: %v", err)
+	}
 
 	log.Printf("update to %s confirmed", s.pendingVersion)
 	s.pendingVersion = ""
+	s.previousVersion = ""
+	s.backupBinary = ""
 
 	return nil
 }
@@ -241,33 +295,127 @@ func (s *UpdateService) Rollback(ctx context.Context) error {
 		s.watchdogCancel = nil
 	}
 
-	backupBinary := s.binaryPath + ".bak"
+	backupBinary := s.backupBinary
+	if backupBinary == "" {
+		backupBinary = s.binaryPath + ".bak"
+	}
 	if _, err := netutil.Run(ctx, "cp", "-f", backupBinary, s.binaryPath); err != nil {
 		return fmt.Errorf("rollback: %w", err)
 	}
 
 	log.Printf("update rolled back from %s", s.pendingVersion)
+	if s.previousVersion != "" {
+		s.updateBootBranding(ctx, s.previousVersion)
+	}
+	if err := s.clearUpdateState(); err != nil {
+		log.Printf("clear update state failed: %v", err)
+	}
 	s.pendingVersion = ""
+	s.previousVersion = ""
+	s.backupBinary = ""
 
 	netutil.Run(ctx, "systemctl", "restart", "home-router.target")
 
 	return nil
 }
 
-func (s *UpdateService) watchdog(ctx context.Context, backupBinary string) {
+func (s *UpdateService) watchdog(ctx context.Context, delay time.Duration) {
 	select {
 	case <-ctx.Done():
 		return
-	case <-time.After(60 * time.Second):
+	case <-time.After(delay):
 		log.Println("update watchdog: no confirmation received, rolling back")
-		s.mu.Lock()
-		s.pendingVersion = ""
-		s.watchdogCancel = nil
-		s.mu.Unlock()
 		rollbackCtx := context.Background()
-		netutil.Run(rollbackCtx, "cp", "-f", backupBinary, s.binaryPath)
-		netutil.Run(rollbackCtx, "systemctl", "restart", "home-router.target")
+		if err := s.Rollback(rollbackCtx); err != nil {
+			log.Printf("update watchdog rollback failed: %v", err)
+		}
 	}
+}
+
+func (s *UpdateService) restorePendingUpdate() {
+	data, err := os.ReadFile(s.statePath)
+	if err != nil {
+		return
+	}
+
+	var state updateState
+	if err := json.Unmarshal(data, &state); err != nil {
+		log.Printf("update: ignoring invalid state file: %v", err)
+		return
+	}
+	if state.PendingVersion == "" || state.BackupBinary == "" {
+		return
+	}
+
+	s.pendingVersion = state.PendingVersion
+	s.previousVersion = state.PreviousVersion
+	s.backupBinary = state.BackupBinary
+
+	elapsed := time.Since(state.AppliedAt)
+	remaining := updateConfirmWindow - elapsed
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	watchCtx, cancel := context.WithCancel(context.Background())
+	s.watchdogCancel = cancel
+	go s.watchdog(watchCtx, remaining)
+
+	log.Printf("update: restored pending update to %s, rollback in %s", state.PendingVersion, remaining)
+}
+
+func (s *UpdateService) saveUpdateState(state updateState) error {
+	if err := os.MkdirAll(filepath.Dir(s.statePath), 0o750); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	return os.WriteFile(s.statePath, data, 0o600)
+}
+
+func (s *UpdateService) clearUpdateState() error {
+	if err := os.Remove(s.statePath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func (s *UpdateService) updateBootBranding(ctx context.Context, version string) {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return
+	}
+
+	content := fmt.Sprintf("GRUB_DISTRIBUTOR=\"Home Router %s\"\n", version)
+	if err := netutil.WriteFile("/etc/default/grub.d/home-router.cfg", []byte(content), 0o644); err != nil {
+		log.Printf("update: GRUB branding write failed: %v", err)
+		return
+	}
+	if _, err := netutil.Run(ctx, "update-grub"); err != nil {
+		log.Printf("update: update-grub failed: %v", err)
+	}
+}
+
+func (s *UpdateService) runBinaryVersion(ctx context.Context) (string, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+	}
+
+	out, err := exec.CommandContext(ctx, s.binaryPath, "version").CombinedOutput()
+	return string(out), err
+}
+
+func safeUpdateFileName(name string) string {
+	name = filepath.Base(strings.TrimSpace(name))
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		return "home-router-update.tar.gz"
+	}
+	return name
 }
 
 func (s *UpdateService) downloadFile(ctx context.Context, url, dest string) error {
