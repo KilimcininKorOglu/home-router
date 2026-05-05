@@ -276,7 +276,7 @@ systemctl enable nftables.service 2>/dev/null || true
 # Set the distributor explicitly so the installed disk boots as Home Router.
 mkdir -p /etc/default/grub.d
 cat > /etc/default/grub.d/home-router.cfg <<'GRUBCFG'
-GRUB_DISTRIBUTOR="Home Router"
+GRUB_DISTRIBUTOR="Home Router __HOME_ROUTER_VERSION__"
 GRUBCFG
 if command -v update-grub >/dev/null 2>&1; then
     update-grub >/dev/null 2>&1 || true

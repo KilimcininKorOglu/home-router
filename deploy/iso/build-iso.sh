@@ -8,11 +8,15 @@ DEBIAN_ISO="${1:-}"
 ARCH="${ARCH:-${3:-amd64}}"
 BINARY_PATH="${2:-$PROJECT_ROOT/dist/home-router-linux-$ARCH}"
 OUTPUT_ISO="${OUTPUT_ISO:-${4:-$PROJECT_ROOT/dist/home-router-installer-$ARCH.iso}}"
+VERSION="${VERSION:-${5:-dev}}"
 BUILD_DIR="${BUILD_DIR:-/tmp/home-router-iso-build-$ARCH}"
 PACKAGE_REPO_DIR="${PACKAGE_REPO_DIR:-$PROJECT_ROOT/dist/packages/$ARCH}"
+SED_VERSION="${VERSION//\\/\\\\}"
+SED_VERSION="${SED_VERSION//&/\\&}"
+SED_VERSION="${SED_VERSION//|/\\|}"
 
 if [[ -z "$DEBIAN_ISO" ]]; then
-    echo "Usage: $0 <debian-netinst.iso> [home-router-binary] [amd64|arm64] [output.iso]"
+    echo "Usage: $0 <debian-netinst.iso> [home-router-binary] [amd64|arm64] [output.iso] [version]"
     echo ""
     echo "Example:"
     echo "  make cross-amd64"
@@ -65,6 +69,7 @@ echo "=== Building Home Router Installer ISO ==="
 echo "  Architecture: $ARCH"
 echo "  Debian ISO: $DEBIAN_ISO"
 echo "  Binary:     $BINARY_PATH"
+echo "  Version:    $VERSION"
 echo "  Packages:   $PACKAGE_REPO_DIR"
 echo "  Output:     $OUTPUT_ISO"
 echo ""
@@ -128,6 +133,7 @@ echo "[4/7] Adding home-router files..."
 cp "$BINARY_PATH" "$BUILD_DIR/iso/home-router"
 cp "$SCRIPT_DIR/preseed.cfg" "$BUILD_DIR/iso/"
 cp "$SCRIPT_DIR/post-install.sh" "$BUILD_DIR/iso/"
+sed -i "s|__HOME_ROUTER_VERSION__|$SED_VERSION|g" "$BUILD_DIR/iso/post-install.sh"
 find -L /usr/share/zoneinfo -type f \
     | sed 's|^/usr/share/zoneinfo/||' \
     | grep -E '^(Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific|Etc)/|^(CET|EET|GMT|MET|UTC|WET)$' \
@@ -207,6 +213,7 @@ fi
 sed \
     -e "s|__KERNEL_PATH__|$KERNEL_PATH|g" \
     -e "s|__INITRD_PATH__|$INITRD_PATH|g" \
+    -e "s|__HOME_ROUTER_VERSION__|$SED_VERSION|g" \
     "$SCRIPT_DIR/grub.cfg" > "$BUILD_DIR/iso/boot/grub/grub.cfg"
 echo "  Installer boot files: $KERNEL_PATH $INITRD_PATH"
 
@@ -226,7 +233,7 @@ if [[ -f "$BUILD_DIR/iso/isolinux/txt.cfg" ]]; then
 default install
 
 label install
-    menu label ^Home Router Install
+    menu label ^Home Router Install $VERSION
     menu default
     kernel $KERNEL_PATH
     append initrd=$INITRD_PATH $INSTALLER_PARAMS ---
