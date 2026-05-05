@@ -272,6 +272,16 @@ NFT
 chmod 644 /etc/nftables.conf
 systemctl enable nftables.service 2>/dev/null || true
 
+# GRUB branding — Debian's generated menu defaults to "Debian GNU/Linux".
+# Set the distributor explicitly so the installed disk boots as Home Router.
+mkdir -p /etc/default/grub.d
+cat > /etc/default/grub.d/home-router.cfg <<'GRUBCFG'
+GRUB_DISTRIBUTOR="Home Router"
+GRUBCFG
+if command -v update-grub >/dev/null 2>&1; then
+    update-grub >/dev/null 2>&1 || true
+fi
+
 # SSH hardening — ensure PermitRootLogin yes / PasswordAuthentication yes
 # regardless of whether the line is currently commented or not. The
 # bootstrap nftables ruleset above already restricts SSH to the LAN

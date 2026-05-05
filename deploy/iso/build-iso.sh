@@ -222,7 +222,15 @@ fi
 echo "[6/7] Updating isolinux config..."
 if [[ -f "$BUILD_DIR/iso/isolinux/txt.cfg" ]]; then
     INSTALLER_PARAMS='priority=high locale?=en_US.UTF-8 keymap?=tr time/zone=Europe/Istanbul preseed/file=/cdrom/preseed.cfg'
-    sed -i "s|append |append $INSTALLER_PARAMS |" "$BUILD_DIR/iso/isolinux/txt.cfg"
+    cat > "$BUILD_DIR/iso/isolinux/txt.cfg" <<EOF
+default install
+
+label install
+    menu label ^Home Router Install
+    menu default
+    kernel $KERNEL_PATH
+    append initrd=$INITRD_PATH $INSTALLER_PARAMS ---
+EOF
 fi
 
 echo "[7/7] Building ISO..."
