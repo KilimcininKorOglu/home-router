@@ -67,14 +67,14 @@ iso-amd64: cross-amd64 docker-builder-amd64
 	@test -n "$(DEBIAN_AMD64_ISO)" || (echo "DEBIAN_AMD64_ISO or DEBIAN_ISO is required" >&2; exit 1)
 	$(DOCKER) run --platform linux/amd64 --rm \
 		-v $(CURDIR):/build \
-		-v $(DEBIAN_AMD64_ISO):/debian.iso:ro \
+		-v $(CURDIR)/$(DEBIAN_AMD64_ISO):/debian.iso:ro \
 		$(ISO_BUILDER_AMD64) /debian.iso /build/$(AMD64_BINARY) amd64 /build/$(AMD64_ISO) $(VERSION)
 
 iso-arm64: cross-arm64 docker-builder-arm64
 	@test -n "$(DEBIAN_ARM64_ISO)" || (echo "DEBIAN_ARM64_ISO is required" >&2; exit 1)
 	$(DOCKER) run --platform linux/arm64 --rm \
 		-v $(CURDIR):/build \
-		-v $(DEBIAN_ARM64_ISO):/debian.iso:ro \
+		-v $(CURDIR)/$(DEBIAN_ARM64_ISO):/debian.iso:ro \
 		$(ISO_BUILDER_ARM64) /debian.iso /build/$(ARM64_BINARY) arm64 /build/$(ARM64_ISO) $(VERSION)
 
 iso-all: iso-amd64 iso-arm64
