@@ -71,6 +71,16 @@ func (f *fakeAgent) Call(_ context.Context, method string, params any) (json.Raw
 			return nil, err
 		}
 		f.writeLog = append(f.writeLog, writeCall{Path: p.Path, Body: p.Content})
+		// Mirror the write to the real filesystem so a subsequent
+		// file.read passthrough sees the same bytes a production
+		// agent would have persisted. Best-effort: failures are
+		// silent because some tests target paths under /etc which
+		// the test process cannot create. Those tests assert via
+		// writeLog instead of round-tripping through file.read.
+		if dir := filepath.Dir(p.Path); dir != "" {
+			_ = os.MkdirAll(dir, 0o755)
+		}
+		_ = os.WriteFile(p.Path, []byte(p.Content), 0o644)
 		return []byte(`{}`), nil
 	case "file.mkdir":
 		return []byte(`{}`), nil
