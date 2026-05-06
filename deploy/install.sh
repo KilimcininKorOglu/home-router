@@ -58,6 +58,7 @@ install_dependencies() {
         chrony \
         qrencode \
         wide-dhcpv6-client \
+        dnscrypt-proxy \
         curl \
         jq \
         hdparm
@@ -505,6 +506,11 @@ enable_native_services() {
             log_info "Enabled $svc.service"
         fi
     done
+    # dnscrypt-proxy stays disabled by default - the operator turns
+    # it on by picking DoH in the /dns settings page, which triggers
+    # ApplyConfig + systemctl restart.
+    systemctl disable dnscrypt-proxy 2>/dev/null || true
+    systemctl stop dnscrypt-proxy 2>/dev/null || true
 }
 
 check_installation() {

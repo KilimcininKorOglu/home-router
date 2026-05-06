@@ -96,7 +96,7 @@ LANKEEPER_PACKAGES=(
     bash dbus ppp pppoe nftables wireguard-tools openvpn easy-rsa
     samba samba-common-bin smartmontools mdadm iproute2
     unbound dnsmasq rsyslog chrony qrencode
-    wide-dhcpv6-client curl jq hdparm openssh-server htop
+    wide-dhcpv6-client dnscrypt-proxy curl jq hdparm openssh-server htop
 )
 
 PACKAGES=( "${STANDARD_TASK_PACKAGES[@]}" "${LANKEEPER_PACKAGES[@]}" )
