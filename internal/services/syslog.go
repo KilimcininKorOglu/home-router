@@ -26,6 +26,32 @@ var allowedTLSDirs = []string{
 	"/etc/rsyslog.d/",
 }
 
+// rsyslogPathChars is the conservative character set we allow inside
+// any path interpolated into rsyslog.conf. The template renders these
+// values inside RainerScript double-quoted strings — `"`, `(`, `)`,
+// newlines, NULs, and whitespace would all close the string and
+// permit injection of arbitrary directives such as
+// `module(load="omprog" binary="/bin/sh")`. (BUG-069)
+//
+// Real-world TLS / log paths only need alphanumerics, `/`, `.`, `_`,
+// `-`, `+` and `~` (for keyring suffix on some distros). Everything
+// else is rejected.
+const rsyslogPathChars = "abcdefghijklmnopqrstuvwxyz" +
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+	"0123456789" +
+	"/._-+~"
+
+// hasOnlyRsyslogPathChars reports whether every byte of p is in the
+// conservative allowlist used for rsyslog.conf interpolation.
+func hasOnlyRsyslogPathChars(p string) bool {
+	for i := 0; i < len(p); i++ {
+		if !strings.ContainsRune(rsyslogPathChars, rune(p[i])) {
+			return false
+		}
+	}
+	return true
+}
+
 type SyslogService struct {
 	cfg *config.Config
 }
@@ -116,6 +142,9 @@ func validateLogPath(p string) error {
 	if !filepath.IsAbs(p) {
 		return fmt.Errorf("syslog log_path must be an absolute path, got %q", p)
 	}
+	if !hasOnlyRsyslogPathChars(p) {
+		return fmt.Errorf("syslog log_path contains characters that could escape rsyslog's quoted-string syntax; allowed: %s", rsyslogPathChars)
+	}
 	clean := filepath.Clean(p)
 	if clean != p {
 		return fmt.Errorf("syslog log_path contains traversal segments; expected %q, got %q", clean, p)
@@ -155,6 +184,9 @@ func validateTLSPath(field, p string) error {
 	}
 	if !filepath.IsAbs(p) {
 		return fmt.Errorf("syslog %s must be an absolute path, got %q", field, p)
+	}
+	if !hasOnlyRsyslogPathChars(p) {
+		return fmt.Errorf("syslog %s contains characters that could escape rsyslog's quoted-string syntax; allowed: %s", field, rsyslogPathChars)
 	}
 	clean := filepath.Clean(p)
 	if clean != p {

@@ -80,6 +80,62 @@ func TestSyslogSaveServerEmptyPathsAccepted(t *testing.T) {
 	}
 }
 
+// TestSyslogSaveServerRejectsRainerScriptInjection covers BUG-069:
+// values like `/etc/ssl/cert.pem"\n)module(load="omprog")` would
+// otherwise close the RainerScript double-quoted string and inject
+// arbitrary rsyslog directives (omprog → command execution). The
+// path-prefix allowlist alone is not sufficient — `/etc/ssl/...` is
+// allowed, but the suffix can still contain `"`, `\n`, `(`.
+func TestSyslogSaveServerRejectsRainerScriptInjection(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  config.SyslogServerConfig
+	}{
+		{
+			"quote in cert",
+			config.SyslogServerConfig{TLSCertFile: "/etc/ssl/cert.pem\"hi"},
+		},
+		{
+			"omprog injection in cert",
+			config.SyslogServerConfig{TLSCertFile: "/etc/ssl/cert.pem\"\n)module(load=\"omprog\" binary=\"/bin/sh\")\n#"},
+		},
+		{
+			"newline in key",
+			config.SyslogServerConfig{TLSKeyFile: "/etc/ssl/private/k.pem\nfoo"},
+		},
+		{
+			"paren in CA",
+			config.SyslogServerConfig{TLSCAFile: "/etc/lankeeper/ca.pem)"},
+		},
+		{
+			"NUL byte in cert",
+			config.SyslogServerConfig{TLSCertFile: "/etc/ssl/cert.pem\x00.evil"},
+		},
+		{
+			"space in cert",
+			config.SyslogServerConfig{TLSCertFile: "/etc/ssl/cert.pem evil"},
+		},
+		{
+			"quote in log_path",
+			config.SyslogServerConfig{LogPath: "/var/log/lankeeper\""},
+		},
+		{
+			"newline in log_path",
+			config.SyslogServerConfig{LogPath: "/var/log/lankeeper\n)action(type=\"omprog\""},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.DefaultConfig()
+			cfg.SetFilePath(filepath.Join(t.TempDir(), "router.yaml"))
+			svc := services.NewSyslogService(cfg)
+			if err := svc.SaveServerConfig(tc.cfg); err == nil {
+				t.Fatalf("expected error for %+v, got nil", tc.cfg)
+			}
+		})
+	}
+}
+
 // TestSyslogSaveServerRejectsPathTraversalLogPath verifies that an
 // authenticated operator cannot point rsyslog's dynaFile root at
 // privileged directories. With LAN syslog clients writing message
