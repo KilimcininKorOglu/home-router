@@ -4,6 +4,48 @@ All notable changes to LANKeeper are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-05-06
+
+DHCPv6 Prefix Delegation: LANKeeper now requests an IPv6 prefix
+from the ISP (RFC 8415), persists the lease, and carves a /64 sub-prefix
+out of the delegation for every downstream interface (LAN bridge plus
+each VLAN). A dedicated `/ipv6` page exposes lease status and full
+lifecycle controls.
+
+### Added
+
+- **DHCPv6-PD client**: `wide-dhcpv6` (`dhcp6c`) integrated as
+  `lankeeper-dhcp6c.service`, conflicts with Debian's stock unit so
+  the two never race. Lease events persisted by a hook script to
+  `/var/lib/lankeeper/state/ipv6-prefix.json`.
+- **IPv6Service**: 3-layer config rendering (RenderConfig /
+  RenderToDisk / ApplyConfig) plus Start/Stop/Restart/Renew/Release
+  lifecycle. WAN device resolution honours PPPoE (uses `ppp0` when
+  `cfg.PPPoE.Username` is set). Prefix hint validated to /48..\/64;
+  sla-len auto-derived as `64 - delegated_length`.
+- **VLAN sub-prefix assignment**: `IPv6LANConfig.SubnetMap` (operator
+  override keyed by VLAN ID) plus auto-incrementing `sla-id` per VLAN.
+  /64 delegations correctly skip VLAN entries (no subnet bits left).
+- **/ipv6 web page**: status card with delegated prefix, last event
+  reason, preferred/valid lifetimes, RDNSS; action buttons for
+  Renew / Release / Start / Stop; WAN config form bound to mode,
+  prefix hint, request prefix, rapid commit. Sidebar entry between
+  DHCP and QoS. Full Turkish/English locale parity.
+- **PPPoE cross-service hooks**: `SetOnConnect` / `SetOnDisconnect`
+  registrations let the IPv6 service restart `dhcp6c` whenever
+  `ppp0` is rebuilt.
+
+### Changed
+
+- **Agent whitelist** (44 -> 46 commands): `dhcp6c`, `dhcp6ctl` added.
+  Path whitelist gains `/etc/wide-dhcpv6/` and `/var/lib/lankeeper/`
+  for read+write.
+- **render-configs subcommand**: `ipv6/dhcp6c` step renders both the
+  daemon config and the lease hook script at install time so the
+  service boots correctly on first start.
+- **Config schema**: `IPv6WANConfig.RapidCommit` (default true) for
+  the two-message DHCPv6 exchange.
+
 ## [0.1.0] - 2026-05-06
 
 Initial public release. LANKeeper is a single-binary Go + HTMX home
