@@ -2607,7 +2607,6 @@ v0.1.0 (2026-05-06) ile yukarıdaki 11 faz tamamlandı. Aşağıdaki başlıklar
 
 ### Sonraki adaylar (önceliksiz)
 
-- WireGuard UI'da peer-to-peer site-to-site tek-tıklık kurulum sihirbazı.
 - Backup snapshot scheduling (cron-bazlı otomatik dışa aktarım + S3/SFTP retention).
 - DNS-over-HTTPS upstream (Unbound 1.18+ ile native).
 - Metrik export endpoint (Prometheus formatı `/metrics`, sadece LAN-only).
@@ -2619,3 +2618,9 @@ v0.1.0 (2026-05-06) ile yukarıdaki 11 faz tamamlandı. Aşağıdaki başlıklar
   `/qos` sayfasında canlı tablo + sparkline. CAKE class stats yerine
   nftables forward sayaçları kullanıldı (CAKE per-host stats
   netlink-only; pretty-print yok).
+- WireGuard site-to-site sihirbazı — iki LANKeeper arasında HMAC-imzalı
+  invite + ack token alışverişiyle tek-tıklık peer kurulumu. Pending
+  peer state machine, `wg syncconf` ile canlı reload, expired-invite
+  GC ticker. `/vpn/s2s` wizard sayfası, `/events/qos` ile aynı patern.
+  Plain `wg`/pfSense ile birlikte çalışırlık manuel paste-config ile
+  korunuyor; LANKeeper↔LANKeeper akışı tamamen otomatik.

@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **(vpn) Site-to-Site wizard**: a new `/vpn/s2s` page lets two
+  LANKeeper routers establish a WireGuard mesh by exchanging two
+  HMAC-signed tokens — no manual key copy/paste between
+  `wg0.conf` files. The originator issues an invite token (peer
+  name, public endpoint, expected remote LAN); the joining side
+  consumes it, registers the originator as a peer and returns an
+  ack token bearing its own public key. Pending peers are skipped
+  in `wireguard-server.conf` until the ack arrives, garbage
+  collected after invite expiry (60 min default), and applied
+  live via `wg syncconf` so the running tunnel never bounces.
+  Peer subnet conflicts with local LANs are rejected at issue
+  time. New endpoints: `/vpn/s2s/invite`, `/vpn/s2s/join`,
+  `/vpn/s2s/finalize`, `DELETE /vpn/s2s/{name}`,
+  `/vpn/s2s/{name}/health`, `/vpn/s2s/{name}/reachability` (single
+  ICMP echo over wgs0).
 - **(qos) Per-client bandwidth visibility**: `/qos` now ships a live
   table that lists every DHCP-known client with its hostname, MAC,
   current download/upload throughput, cumulative byte counters and a
