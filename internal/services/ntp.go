@@ -206,6 +206,15 @@ func (s *NTPService) GetConfig() config.NTPConfig {
 	return s.cfg.NTP
 }
 
+// MaxNTPSources / MaxNTPAllowSubnets cap how many entries can land
+// in chrony.conf. Both lists feed a chrony reload after every
+// mutation; without a ceiling, an authenticated client could grow
+// router.yaml indefinitely and slow chrony's startup.
+const (
+	MaxNTPSources       = 20
+	MaxNTPAllowSubnets  = 50
+)
+
 // AddSource appends a NTP server hostname to the client source list.
 // The host is validated against the chrony-grammar allowlist so an
 // authenticated operator cannot inject extra `allow`/`cmdallow`
@@ -214,6 +223,9 @@ func (s *NTPService) AddSource(host string) error {
 	host = strings.TrimSpace(host)
 	if err := validateNTPHost(host); err != nil {
 		return err
+	}
+	if len(s.cfg.NTP.Client.Sources) >= MaxNTPSources {
+		return fmt.Errorf("maximum %d NTP sources reached", MaxNTPSources)
 	}
 	for _, src := range s.cfg.NTP.Client.Sources {
 		if strings.EqualFold(src, host) {
@@ -241,6 +253,9 @@ func (s *NTPService) AddAllowSubnet(cidr string) error {
 	cidr = strings.TrimSpace(cidr)
 	if cidr == "" {
 		return fmt.Errorf("empty subnet")
+	}
+	if len(s.cfg.NTP.AllowSubnets) >= MaxNTPAllowSubnets {
+		return fmt.Errorf("maximum %d NTP allow subnets reached", MaxNTPAllowSubnets)
 	}
 	for _, sub := range s.cfg.NTP.AllowSubnets {
 		if sub == cidr {

@@ -598,12 +598,25 @@ func ipv4PTR(ip string) string {
 	return fmt.Sprintf("%d.%d.%d.%d.in-addr.arpa.", v4[3], v4[2], v4[1], v4[0])
 }
 
+// MaxStaticDNSRecords caps the number of static DNS entries that can
+// be stored in router.yaml. Every Add triggers a full rewrite of the
+// YAML and a regeneration of the unbound-served local zone, so an
+// unbounded list lets an authenticated client amplify a small POST
+// loop into quadratic disk writes and an oversized unbound config.
+// A few hundred records is far above what a home network ever
+// needs, but well below the cardinality that starts hurting unbound
+// reload latency.
+const MaxStaticDNSRecords = 500
+
 // AddStaticRecord adds a forward A record. The Name should be an FQDN
 // (e.g. "printer.hermes.lan"). LocalZone=true also emits a typetransparent
 // local-zone for split-DNS.
 func (s *DNSService) AddStaticRecord(rec config.StaticDNSRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if len(s.cfg.DNS.StaticRecords) >= MaxStaticDNSRecords {
+		return fmt.Errorf("maximum %d static DNS records reached", MaxStaticDNSRecords)
+	}
 	for _, r := range s.cfg.DNS.StaticRecords {
 		if strings.EqualFold(r.Name, rec.Name) {
 			return fmt.Errorf("DNS record %s already exists", rec.Name)

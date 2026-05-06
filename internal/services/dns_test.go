@@ -2,6 +2,7 @@ package services_test
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -153,5 +154,29 @@ func TestClearQueryLog(t *testing.T) {
 	queries := svc.GetRecentQueries(10, 0)
 	if len(queries) != 0 {
 		t.Error("should be empty after clear")
+	}
+}
+
+// TestDNSAddStaticRecordEnforcesCap verifies that AddStaticRecord
+// refuses to grow the local zone beyond the documented ceiling. A
+// scripted Add loop with unique hostnames would otherwise drive
+// router.yaml writes (full-file rewrite each call) and unbound
+// reload latency unbounded.
+func TestDNSAddStaticRecordEnforcesCap(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.SetFilePath(filepath.Join(t.TempDir(), "router.yaml"))
+	svc := services.NewDNSService(cfg)
+	for i := 0; i < services.MaxStaticDNSRecords; i++ {
+		rec := config.StaticDNSRecord{
+			Name: fmt.Sprintf("h%d.hermes.lan", i),
+			IP:   "10.10.10.5",
+		}
+		if err := svc.AddStaticRecord(rec); err != nil {
+			t.Fatalf("AddStaticRecord %d: %v", i, err)
+		}
+	}
+	overflow := config.StaticDNSRecord{Name: "overflow.hermes.lan", IP: "10.10.10.6"}
+	if err := svc.AddStaticRecord(overflow); err == nil {
+		t.Fatalf("expected cap rejection, got nil")
 	}
 }

@@ -1,6 +1,7 @@
 package services_test
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -103,6 +104,43 @@ func TestNTPSaveSettingsAcceptsValidListenAddress(t *testing.T) {
 		if err := svc.SaveSettings("", addr, 0, true, false); err != nil {
 			t.Fatalf("expected accept for %q, got %v", addr, err)
 		}
+	}
+}
+
+// TestNTPAddSourceEnforcesCap verifies that AddSource refuses to
+// grow chrony.conf beyond the documented ceiling. Once the cap is
+// reached, even a unique hostname must be rejected so a scripted
+// loop cannot drive `router.yaml` (and the resulting chrony reload)
+// arbitrarily large.
+func TestNTPAddSourceEnforcesCap(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.SetFilePath(filepath.Join(t.TempDir(), "router.yaml"))
+	svc := services.NewNTPService(cfg)
+	for i := 0; i < services.MaxNTPSources; i++ {
+		host := fmt.Sprintf("s%d.ntp.example", i)
+		if err := svc.AddSource(host); err != nil {
+			t.Fatalf("AddSource(%q): %v", host, err)
+		}
+	}
+	if err := svc.AddSource("overflow.ntp.example"); err == nil {
+		t.Fatalf("expected cap rejection, got nil")
+	}
+}
+
+// TestNTPAddAllowSubnetEnforcesCap mirrors the cap check for the
+// chrony allow-subnet list.
+func TestNTPAddAllowSubnetEnforcesCap(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.SetFilePath(filepath.Join(t.TempDir(), "router.yaml"))
+	svc := services.NewNTPService(cfg)
+	for i := 0; i < services.MaxNTPAllowSubnets; i++ {
+		cidr := fmt.Sprintf("10.%d.0.0/16", i)
+		if err := svc.AddAllowSubnet(cidr); err != nil {
+			t.Fatalf("AddAllowSubnet(%q): %v", cidr, err)
+		}
+	}
+	if err := svc.AddAllowSubnet("172.16.0.0/16"); err == nil {
+		t.Fatalf("expected cap rejection, got nil")
 	}
 }
 
