@@ -42,6 +42,11 @@ type Server struct {
 	ipv6      *handlers.IPv6Handler
 	health    *handlers.HealthCheckHandler
 	sse       *SSEBroker
+	// qosSse is dedicated to per-client bandwidth events. Kept
+	// separate from sse so consumers of /events/stats are not
+	// flooded with qos-clients payloads they will not render.
+	qosSse    *SSEBroker
+	qosSvc    *services.QoSService
 	monitor   *services.MonitorService
 	dhcpSvc   *services.DHCPService
 	ipv6Svc   *services.IPv6Service
@@ -166,6 +171,7 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 	dashboardHandler := handlers.NewDashboardHandler(renderer, monitorSvc, pppoeSvc, dhcpSvc)
 	settingsHandler := handlers.NewSystemHandler(renderer, cfg, loc, dhcpSvc, backupSvc, updateSvc)
 	sseBroker := NewSSEBroker()
+	qosBroker := NewSSEBroker()
 
 	s := &Server{
 		cfg:       cfg,
@@ -192,6 +198,8 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 		syslogh:   syslogHandler,
 		ntph:      ntpHandler,
 		sse:       sseBroker,
+		qosSse:    qosBroker,
+		qosSvc:    qosSvc,
 		monitor:   monitorSvc,
 		ipv6Svc:   ipv6Svc,
 		// 1 probe/sec, burst 2 — comfortable for a single admin
@@ -249,6 +257,17 @@ func (s *Server) Serve(ctx context.Context) error {
 	stopMonitor := make(chan struct{})
 	go s.monitor.Start(stopMonitor, ifaceNames)
 	go s.publishStats(ctx)
+
+	// Per-client bandwidth sampler. Owns the lankeeper_qos
+	// nftables table; resyncs counter set from the dnsmasq lease
+	// file every 30 ticks (~1 minute at 2s interval).
+	s.qosSvc.StartClientSampler(
+		ctx,
+		s.qosSse,
+		s.dhcpSvc.GetLeases,
+		2*time.Second,
+		30,
+	)
 
 	go func() {
 		<-ctx.Done()
@@ -309,6 +328,7 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 	authed := AuthRequired(s.auth)
 	mux.Handle("GET /{$}", authed(http.HandlerFunc(s.dashboard.HandlePage)))
 	mux.Handle("GET /events/stats", authed(http.HandlerFunc(s.sse.ServeHTTP)))
+	mux.Handle("GET /events/qos", authed(http.HandlerFunc(s.qosSse.ServeHTTP)))
 	mux.Handle("GET /settings", authed(http.HandlerFunc(s.settings.HandleSettingsPage)))
 	mux.Handle("POST /settings/web-password", authed(http.HandlerFunc(s.settings.HandleChangeWebPassword)))
 	mux.Handle("POST /settings/root-password", authed(http.HandlerFunc(s.settings.HandleChangeRootPassword)))
