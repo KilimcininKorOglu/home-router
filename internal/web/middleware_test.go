@@ -28,6 +28,41 @@ func TestRateLimiter(t *testing.T) {
 	}
 }
 
+// TestRateLimiterMiddlewareReturns429 guarantees that a denied
+// request short-circuits with 429 Too Many Requests instead of
+// reaching the wrapped handler. This is the contract the DoT-probe
+// route relies on to cap goroutine occupancy: at burst+1 the
+// blocking inner handler is never invoked, so the per-IP request
+// rate caps the per-IP goroutine count.
+func TestRateLimiterMiddlewareReturns429(t *testing.T) {
+	rl := web.NewRateLimiter(1, 2)
+	calls := 0
+	wrapped := rl.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	doRequest := func() int {
+		req := httptest.NewRequest(http.MethodPost, "/probe", nil)
+		req.RemoteAddr = "10.10.10.50:12345"
+		rec := httptest.NewRecorder()
+		wrapped.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	for i := 0; i < 2; i++ {
+		if code := doRequest(); code != http.StatusOK {
+			t.Fatalf("burst request %d: code = %d, want 200", i, code)
+		}
+	}
+	if code := doRequest(); code != http.StatusTooManyRequests {
+		t.Fatalf("post-burst request: code = %d, want 429", code)
+	}
+	if calls != 2 {
+		t.Fatalf("inner handler ran %d times, want 2 (burst limit)", calls)
+	}
+}
+
 func TestLANOnlyMiddleware(t *testing.T) {
 	_, lanNet, _ := net.ParseCIDR("10.10.10.0/24")
 	middleware := web.LANOnly([]*net.IPNet{lanNet})

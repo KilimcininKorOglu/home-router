@@ -45,6 +45,13 @@ type Server struct {
 	monitor   *services.MonitorService
 	dhcpSvc   *services.DHCPService
 	ipv6Svc   *services.IPv6Service
+	// dotProbeLimiter throttles `POST /dns/dot/probe` to a tight
+	// per-client budget. ProbeDoT performs a synchronous TLS dial
+	// with a 5-second outer timeout; without this limiter an
+	// authenticated client could ride the global 30/s, burst-60
+	// limiter to keep ~150 HTTP goroutines blocked indefinitely on
+	// filtered upstream IPs and starve the rest of the admin UI.
+	dotProbeLimiter *RateLimiter
 }
 
 func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *services.UpdateService) (*Server, error) {
@@ -187,6 +194,11 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 		sse:       sseBroker,
 		monitor:   monitorSvc,
 		ipv6Svc:   ipv6Svc,
+		// 1 probe/sec, burst 2 — comfortable for a single admin
+		// clicking the Test button in the UI, well below the 5s
+		// per-request blocking budget required to amplify into a
+		// goroutine-exhaustion attack.
+		dotProbeLimiter: NewRateLimiter(1, 2),
 	}
 
 	mux := http.NewServeMux()
@@ -335,7 +347,7 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 	mux.Handle("POST /dns/clear-log", authed(http.HandlerFunc(s.dns.HandleClearLog)))
 	mux.Handle("POST /dns/blocklist/update", authed(http.HandlerFunc(s.dns.HandleUpdateBlocklist)))
 	mux.Handle("POST /dns/dot", authed(http.HandlerFunc(s.dns.HandleSaveDoT)))
-	mux.Handle("POST /dns/dot/probe", authed(http.HandlerFunc(s.dns.HandleProbeDoT)))
+	mux.Handle("POST /dns/dot/probe", authed(s.dotProbeLimiter.Middleware(http.HandlerFunc(s.dns.HandleProbeDoT))))
 	mux.Handle("POST /dns/records", authed(http.HandlerFunc(s.dns.HandleAddRecord)))
 	mux.Handle("DELETE /dns/records/{index}", authed(http.HandlerFunc(s.dns.HandleDeleteRecord)))
 	mux.Handle("GET /dhcp", authed(http.HandlerFunc(s.dhcp.HandlePage)))
