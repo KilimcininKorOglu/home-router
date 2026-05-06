@@ -1,6 +1,13 @@
 #!/bin/sh
 set -eu
 
+# Wipe the plaintext admin password file no matter how this script
+# exits. Without this trap a mid-install crash (apt failure, sed
+# error, etc.) leaves /tmp/admin-password.txt on the freshly
+# installed system, persisting across the first reboot on stock
+# Debian where /tmp is not a tmpfs.
+trap 'rm -f /tmp/admin-password.txt' EXIT INT TERM
+
 BINARY_NAME="lankeeper"
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/lankeeper"
@@ -183,8 +190,11 @@ if [ ! -f "$CONFIG_DIR/router.yaml" ]; then
     fi
 fi
 
-# Set admin password from installer
+# Set admin password from installer. The file is normally already
+# 0600 (preseed.cfg installs it that way), but harden defensively in
+# case an earlier d-i hook touched it with the default umask.
 if [ -f /tmp/admin-password.txt ]; then
+    chmod 0600 /tmp/admin-password.txt 2>/dev/null || true
     ADMIN_PASS=$(cat /tmp/admin-password.txt)
     if [ -z "$ADMIN_PASS" ]; then
         echo "UYARI / WARN: Yönetici şifresi boş, ayarlanmadı / Admin password empty, not set"
