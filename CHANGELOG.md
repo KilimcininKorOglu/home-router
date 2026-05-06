@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-06
+
+IPv6 reaches feature parity. wide-dhcpv6 already delegates an ISP
+prefix in v0.2.0; v0.3.0 makes it actually useful end-to-end —
+dnsmasq announces every /64 sub-prefix per LAN/VLAN, RDNSS/DNSSL
+get pumped through the Router Advertisement (RFC 8106), the firewall
+re-applies on every lease change, ULA bootstraps itself, and the
+operator finally sees prefix lifetime / RDNSS state on `/ipv6`.
+
 ### Added
 
 - **dnsmasq IPv6 RA per VLAN**: a new dnsmasq drop-in
