@@ -69,6 +69,37 @@ func TestSaveDNSSettingsRejectsBareIPDoTUpstream(t *testing.T) {
 	}
 }
 
+// TestSaveDNSSettingsRejectsSSRFTargets verifies that DoT upstreams
+// pointing at loopback / link-local / RFC-1918 / IMDS — or at any
+// non-853 port — are refused at the service boundary. The probe
+// would otherwise act as a TCP port scanner against the router
+// itself and the LAN. (BUG-066)
+func TestSaveDNSSettingsRejectsSSRFTargets(t *testing.T) {
+	cases := []struct {
+		name     string
+		upstream string
+	}{
+		{"loopback v4", "127.0.0.1#cloudflare-dns.com"},
+		{"loopback v6", "::1#cloudflare-dns.com"},
+		{"link-local v4 IMDS", "169.254.169.254#metadata"},
+		{"RFC-1918 10/8", "10.10.10.1#lan"},
+		{"RFC-1918 192.168/16", "192.168.1.1#lan"},
+		{"RFC-1918 172.16/12", "172.16.0.1#lan"},
+		{"IPv6 ULA", "fd00::1#lan"},
+		{"non-853 port", "1.1.1.1@8443#cloudflare-dns.com"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.DefaultConfig()
+			cfg.SetFilePath(filepath.Join(t.TempDir(), "router.yaml"))
+			svc := services.NewDNSService(cfg)
+			if err := svc.SaveDNSSettings(true, tc.upstream); err == nil {
+				t.Fatalf("expected error for upstream %q, got nil", tc.upstream)
+			}
+		})
+	}
+}
+
 // TestSaveDNSSettingsAllowsAnyUpstreamWhenDoTDisabled keeps the
 // validator scoped to the "enabled" path so operators can stash a
 // draft upstream while DoT is off. (BUG-059)

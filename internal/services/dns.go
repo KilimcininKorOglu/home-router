@@ -431,13 +431,14 @@ func parseDoTSpec(spec string) (host, port, sni string) {
 	return
 }
 
-// parseAndValidateDoTSpec wraps parseDoTSpec and rejects upstreams
-// that omit the `#hostname` SNI suffix. With SNI absent and the dial
-// address numeric, Go's TLS stack performs only chain validation —
-// a CA-signed certificate issued for any other name still passes the
-// handshake and silently exposes every DNS query to a path attacker.
-// We force the operator to declare the expected hostname so
-// crypto/tls runs VerifyHostname against it.
+// parseAndValidateDoTSpec wraps parseDoTSpec, rejects upstreams that
+// omit the `#hostname` SNI suffix, restricts the destination port to
+// the IANA-assigned DoT port (853), and refuses host values that
+// resolve to loopback / link-local / RFC-1918 / IMDS ranges so the
+// probe cannot be coerced into a TCP port scanner against the router
+// itself or the LAN. Without the SNI suffix Go's TLS stack performs
+// only chain validation and silently MITMs every query (BUG-059);
+// without IP-range guarding the probe acts as an SSRF oracle (BUG-066).
 func parseAndValidateDoTSpec(spec string) (host, port, sni string, err error) {
 	host, port, sni = parseDoTSpec(spec)
 	if host == "" {
@@ -446,7 +447,61 @@ func parseAndValidateDoTSpec(spec string) (host, port, sni string, err error) {
 	if sni == "" {
 		return "", "", "", fmt.Errorf("DoT upstream must include #hostname for certificate validation (e.g. %q#cloudflare-dns.com)", host)
 	}
+	if port != "853" {
+		// IANA assigned DoT to 853 (RFC 7858). Free-form ports turn
+		// the probe into an arbitrary TCP connector.
+		return "", "", "", fmt.Errorf("DoT upstream port must be 853, got %q", port)
+	}
+	if err := validateDoTHostNotInternal(host); err != nil {
+		return "", "", "", err
+	}
 	return host, port, sni, nil
+}
+
+// validateDoTHostNotInternal rejects DoT upstream hosts that point at
+// the router itself or anywhere inside the LAN/cloud-metadata space.
+// Accepts both literal IPs and hostnames; hostnames are resolved and
+// every returned address must be public.
+func validateDoTHostNotInternal(host string) error {
+	var addrs []net.IP
+	if ip := net.ParseIP(host); ip != nil {
+		addrs = []net.IP{ip}
+	} else {
+		// Bound the resolver to the upstream system DNS — DoT probe
+		// is operator-driven, sub-second resolves are normal.
+		ips, lookupErr := net.LookupIP(host)
+		if lookupErr != nil {
+			return fmt.Errorf("resolve %q: %w", host, lookupErr)
+		}
+		if len(ips) == 0 {
+			return fmt.Errorf("no addresses for %q", host)
+		}
+		addrs = ips
+	}
+	for _, ip := range addrs {
+		if isInternalIP(ip) {
+			return fmt.Errorf("DoT upstream %q resolves to a private/loopback/link-local address (%s); refusing to probe internal hosts", host, ip)
+		}
+	}
+	return nil
+}
+
+// isInternalIP reports whether the address falls in any range we
+// must not let an authenticated user probe via the DoT button:
+// loopback (127.0.0.0/8, ::1), link-local (169.254.0.0/16, fe80::/10),
+// unique-local (fc00::/7), and RFC-1918 private space.
+func isInternalIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+		return true
+	}
+	// IsPrivate covers RFC-1918 + IPv6 ULA (fc00::/7).
+	if ip.IsPrivate() {
+		return true
+	}
+	return false
 }
 
 // SaveDNSSettings persists the DoT toggle and upstream string to
