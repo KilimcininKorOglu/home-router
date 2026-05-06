@@ -2,6 +2,7 @@ package services_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,9 +39,16 @@ echo "lease event"
 
 const testDnsmasqRATmpl = `enable-ra
 {{ range .Interfaces }}
-interface={{ .Device }}
-dhcp-range=set:ra-{{ .Device }},::,constructor:{{ .Device }},ra-names,slaac,64,{{ $.LeaseTime }}
-ra-param={{ .Device }},{{ $.RAInterval }},0,0
+{{- $iface := . -}}
+interface={{ $iface.Device }}
+dhcp-range=set:ra-{{ $iface.Device }},::,constructor:{{ $iface.Device }},ra-names,slaac,64,{{ $.LeaseTime }}
+ra-param={{ $iface.Device }},mtu:{{ $.MTU }},{{ $.RAInterval }},0
+{{- range $.RDNSSAddrs }}
+dhcp-option=tag:ra-{{ $iface.Device }},option6:dns-server,[{{ . }}]
+{{- end }}
+{{- if $.SearchDomain }}
+dhcp-option=tag:ra-{{ $iface.Device }},option6:domain-search,{{ $.SearchDomain }}
+{{- end }}
 {{ end }}
 {{- if .ULAPrefix }}
 dhcp-range={{ .ULAPrefix }},ra-only,64,{{ .LeaseTime }}
@@ -353,7 +361,7 @@ func TestIPv6RenderRAConfigCustomInterval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render RA: %v", err)
 	}
-	if !strings.Contains(out, "ra-param=eth1,60,") {
+	if !strings.Contains(out, ",60,0") {
 		t.Errorf("expected custom RA interval 60, got:\n%s", out)
 	}
 }
@@ -478,9 +486,11 @@ func TestIPv6LeaseWatcherFiresOnFileChange(t *testing.T) {
 		t.Fatal("initial dispatch never fired")
 	}
 
-	// Simulate the dhcp6c hook script's atomic-mv write.
+	// Simulate the dhcp6c hook script's atomic-mv write. Use the
+	// current wall-clock timestamp so PrefixState.Active() does not
+	// short-circuit on Expired() (lease lifetime 7200s starts now).
 	tmp := statePath + ".tmp"
-	body := []byte(`{"timestamp":1,"reason":"REPLY","prefix":"2001:db8::","prefixLength":56,"preferredLifetime":3600,"validLifetime":7200}`)
+	body := []byte(fmt.Sprintf(`{"timestamp":%d,"reason":"REPLY","prefix":"2001:db8::","prefixLength":56,"preferredLifetime":3600,"validLifetime":7200}`, time.Now().Unix()))
 	if err := os.WriteFile(tmp, body, 0o644); err != nil {
 		t.Fatalf("write tmp: %v", err)
 	}
@@ -545,6 +555,101 @@ func TestIPv6LeaseWatcherDedupesIdenticalEvents(t *testing.T) {
 		t.Fatal("callback fired for identical lease (dedup broken)")
 	case <-time.After(500 * time.Millisecond):
 		// expected silence
+	}
+}
+
+func TestPrefixStateExpiresIn(t *testing.T) {
+	now := time.Now().Unix()
+
+	expired := services.PrefixState{
+		Timestamp: now - 7200, ValidLifetime: 3600,
+		Prefix: "2001:db8::", PrefixLength: 56, Reason: "REPLY",
+	}
+	if !expired.Expired() {
+		t.Errorf("Expired() should be true past validLifetime")
+	}
+	if expired.Active() {
+		t.Errorf("Active() must be false once expired even with REPLY reason")
+	}
+	if d := expired.ExpiresIn(); d >= 0 {
+		t.Errorf("ExpiresIn() should be negative for expired lease, got %v", d)
+	}
+
+	fresh := services.PrefixState{
+		Timestamp: now, ValidLifetime: 3600,
+		Prefix: "2001:db8::", PrefixLength: 56, Reason: "REPLY",
+	}
+	if fresh.Expired() {
+		t.Errorf("Expired() should be false for fresh lease")
+	}
+	if !fresh.Active() {
+		t.Errorf("Active() should be true for fresh lease")
+	}
+	d := fresh.ExpiresIn()
+	if d <= 0 || d > time.Hour {
+		t.Errorf("ExpiresIn() should be ~1h, got %v", d)
+	}
+
+	zero := services.PrefixState{}
+	if zero.Expired() {
+		t.Errorf("Expired() should be false for zero PrefixState")
+	}
+	if zero.ExpiresIn() != 0 {
+		t.Errorf("ExpiresIn() should be 0 for zero PrefixState, got %v", zero.ExpiresIn())
+	}
+}
+
+func TestIPv6RenderRAConfigEmbedsMTUAndDomain(t *testing.T) {
+	cfg := newIPv6TestConfig(t)
+	cfg.System.Domain = "hermes.lan"
+	svc := newIPv6TestService(t, cfg)
+
+	out, err := svc.RenderRAConfig()
+	if err != nil {
+		t.Fatalf("render RA: %v", err)
+	}
+	if !strings.Contains(out, "mtu:1492") {
+		t.Errorf("expected PPPoE MTU 1492 in ra-param, got:\n%s", out)
+	}
+	if !strings.Contains(out, "option6:domain-search,hermes.lan") {
+		t.Errorf("expected DNSSL option for hermes.lan, got:\n%s", out)
+	}
+}
+
+func TestIPv6RenderRAConfigDirectWANUsesMTU1500(t *testing.T) {
+	cfg := newIPv6TestConfig(t)
+	cfg.PPPoE.Username = "" // direct WAN, not PPPoE
+	svc := newIPv6TestService(t, cfg)
+
+	out, err := svc.RenderRAConfig()
+	if err != nil {
+		t.Fatalf("render RA: %v", err)
+	}
+	if !strings.Contains(out, "mtu:1500") {
+		t.Errorf("expected MTU 1500 for non-PPPoE WAN, got:\n%s", out)
+	}
+}
+
+func TestGenerateULAPrefixIsValid(t *testing.T) {
+	// Cover the helper directly via repeated calls — should never
+	// return the same prefix twice (40 random bits) and must always
+	// match the fdXX:XXXX:XXXX::/48 shape.
+	seen := map[string]bool{}
+	for i := 0; i < 8; i++ {
+		p, err := services.GenerateULAPrefixForTest()
+		if err != nil {
+			t.Fatalf("generate: %v", err)
+		}
+		if !strings.HasPrefix(p, "fd") {
+			t.Errorf("ULA must start with fd, got %q", p)
+		}
+		if !strings.HasSuffix(p, "::/48") {
+			t.Errorf("ULA must end with ::/48, got %q", p)
+		}
+		if seen[p] {
+			t.Errorf("duplicate ULA generated: %q", p)
+		}
+		seen[p] = true
 	}
 }
 

@@ -46,6 +46,13 @@
     "ipv6.announcedHelp": "wide-dhcpv6 carves a /64 sub-prefix for every LAN/VLAN; dnsmasq announces those sub-prefixes via Router Advertisement.",
     "ipv6.interface": "Interface",
     "ipv6.slaId": "SLA-ID",
+    "ipv6.expired": "Expired",
+    "ipv6.expiresIn": "Expires",
+    "ipv6.expiresInTitle": "When the valid lifetime elapses without a renewal, IPv6 traffic stops.",
+    "ipv6.rdnssHelp": "Upstream IPv6 DNS servers are announced to clients via Router Advertisement (RFC 8106).",
+    "ipv6.searchDomain": "Search Domain",
+    "ipv6.ulaPrefix": "ULA Prefix (local)",
+    "ipv6.ulaPending": "will be generated on first lease event",
 
     "dashboard.title": "Dashboard",
     "dashboard.uptime": "Uptime",

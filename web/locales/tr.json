@@ -46,6 +46,13 @@
     "ipv6.announcedHelp": "wide-dhcpv6 her LAN/VLAN için /64 alt-prefix ayırıyor; dnsmasq bu alt-prefix'leri Router Advertisement ile yayınlıyor.",
     "ipv6.interface": "Arayüz",
     "ipv6.slaId": "SLA-ID",
+    "ipv6.expired": "Süresi Doldu",
+    "ipv6.expiresIn": "Bitiş",
+    "ipv6.expiresInTitle": "Geçerli süre dolduğunda lease yenilenmezse IPv6 trafiği kesilir.",
+    "ipv6.rdnssHelp": "ISS'ten alınan IPv6 DNS sunucuları cihazlara Router Advertisement ile bildirilir (RFC 8106).",
+    "ipv6.searchDomain": "Arama Domaini",
+    "ipv6.ulaPrefix": "ULA Prefix (yerel)",
+    "ipv6.ulaPending": "ilk lease olayında üretilecek",
 
     "dashboard.title": "Gösterge Paneli",
     "dashboard.uptime": "Çalışma Süresi",

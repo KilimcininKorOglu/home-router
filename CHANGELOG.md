@@ -36,6 +36,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   are deduped via a Prefix/Reason/Lifetime hash so renewals do not
   cause spurious reloads.
 
+- **IPv6 RA pumps RDNSS / DNSSL through to clients**: the dnsmasq
+  drop-in now embeds `option6:dns-server` per LAN/VLAN derived from the
+  RDNSS field of the dhcp6c lease state, plus an `option6:domain-search`
+  for `cfg.System.Domain`. RA is re-rendered automatically on every
+  lease event so clients learn DNS the IPv6-native way (RFC 8106)
+  instead of relying on DHCPv4 option 6.
+- **RA advertises link MTU**: `ra-param` now includes `mtu:1492` when
+  PPPoE is the WAN, `mtu:1500` otherwise, so clients negotiate the
+  correct MSS over IPv6.
+- **ULA auto-bootstrap**: when `cfg.IPv6.LAN.ULA.Enabled = true` and
+  `Prefix = ""`, IPv6Service generates a `fdXX:XXXX:XXXX::/48` from a
+  40-bit cryptographically random Global ID per RFC 4193 and persists
+  it via `cfg.SaveToFile()`. Subsequent renders reuse the same prefix.
+- **Prefix expiry awareness**: `PrefixState` gains `Expired()` and
+  `ExpiresIn()` helpers driven by the lease timestamp + valid lifetime.
+  `Active()` now returns false once the lifetime has elapsed even
+  before dhcp6c writes a RELEASE. `/ipv6` status card surfaces a
+  countdown badge plus an "Expired" badge when applicable.
+- `/ipv6` page now also surfaces the operator's RDNSS list, search
+  domain and current ULA prefix (or a "will be generated" placeholder).
+- Locale keys added to tr.json and en.json: `ipv6.expired`,
+  `ipv6.expiresIn`, `ipv6.expiresInTitle`, `ipv6.rdnssHelp`,
+  `ipv6.searchDomain`, `ipv6.ulaPrefix`, `ipv6.ulaPending`.
+
 ### Dependencies
 
 - Added `github.com/fsnotify/fsnotify` for IPv6 lease state file watching.

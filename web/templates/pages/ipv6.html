@@ -12,8 +12,13 @@
             <div style="display:flex; gap:var(--space-sm);">
                 {{ if .Active }}
                     <span class="badge badge-success">{{ t $.Lang "ipv6.active" }}</span>
+                {{ else if .Expired }}
+                    <span class="badge badge-error">{{ t $.Lang "ipv6.expired" }}</span>
                 {{ else }}
                     <span class="badge badge-error">{{ t $.Lang "ipv6.inactive" }}</span>
+                {{ end }}
+                {{ if .ExpiresIn }}
+                    <span class="badge badge-info" title="{{ t $.Lang "ipv6.expiresInTitle" }}">{{ t $.Lang "ipv6.expiresIn" }} {{ .ExpiresIn }}</span>
                 {{ end }}
             </div>
         </div>
@@ -43,10 +48,29 @@
                     {{ if .State.ValidLifetime }}{{ .State.ValidLifetime }}s{{ else }}—{{ end }}
                 </div>
             </div>
-            {{ if .State.RDNSS }}
+            {{ if .RDNSSAddrs }}
             <div style="grid-column:1/-1;">
                 <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.rdnss" }}</div>
-                <div style="font-family:monospace; font-size:var(--font-sm); margin-top:var(--space-xs);">{{ .State.RDNSS }}</div>
+                <div style="font-family:monospace; font-size:var(--font-sm); margin-top:var(--space-xs);">
+                    {{ range .RDNSSAddrs }}<span style="display:inline-block; margin-right:var(--space-md);">{{ . }}</span>{{ end }}
+                </div>
+                <div style="color:var(--text-tertiary); font-size:var(--font-xs); margin-top:var(--space-xs);">
+                    {{ t $.Lang "ipv6.rdnssHelp" }}
+                </div>
+            </div>
+            {{ end }}
+            {{ if .SearchDomain }}
+            <div style="grid-column:1/-1;">
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.searchDomain" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-sm); margin-top:var(--space-xs);">{{ .SearchDomain }}</div>
+            </div>
+            {{ end }}
+            {{ if .ULAEnabled }}
+            <div style="grid-column:1/-1;">
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.ulaPrefix" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-sm); margin-top:var(--space-xs);">
+                    {{ if .ULAPrefix }}{{ .ULAPrefix }}{{ else }}{{ t $.Lang "ipv6.ulaPending" }}{{ end }}
+                </div>
             </div>
             {{ end }}
         </div>

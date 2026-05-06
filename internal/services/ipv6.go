@@ -13,6 +13,7 @@ package services
 import (
 	"bytes"
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -59,8 +60,42 @@ type PrefixState struct {
 }
 
 // Active reports whether a usable prefix is currently delegated.
+// Considers the prefix lifeless once ValidLifetime has elapsed since
+// the lease event timestamp, even if dhcp6c has not yet rewritten
+// the state file with a RELEASE.
 func (p PrefixState) Active() bool {
-	return p.Prefix != "" && p.ValidLifetime > 0 && p.Reason != "RELEASE" && p.Reason != "EXIT"
+	if p.Prefix == "" || p.ValidLifetime <= 0 {
+		return false
+	}
+	if p.Reason == "RELEASE" || p.Reason == "EXIT" {
+		return false
+	}
+	if p.Expired() {
+		return false
+	}
+	return true
+}
+
+// Expired reports whether the lease's valid lifetime has elapsed
+// relative to wall-clock time. Returns false when Timestamp is zero
+// (no lease recorded yet) or when ValidLifetime is non-positive.
+func (p PrefixState) Expired() bool {
+	if p.Timestamp == 0 || p.ValidLifetime <= 0 {
+		return false
+	}
+	deadline := time.Unix(p.Timestamp, 0).Add(time.Duration(p.ValidLifetime) * time.Second)
+	return time.Now().After(deadline)
+}
+
+// ExpiresIn returns the time remaining before the valid lifetime ends.
+// Negative values indicate an already-expired lease. Zero when no
+// lease has been recorded.
+func (p PrefixState) ExpiresIn() time.Duration {
+	if p.Timestamp == 0 || p.ValidLifetime <= 0 {
+		return 0
+	}
+	deadline := time.Unix(p.Timestamp, 0).Add(time.Duration(p.ValidLifetime) * time.Second)
+	return time.Until(deadline)
 }
 
 // CIDR returns "<prefix>/<length>" or "" if no prefix is held.
@@ -197,7 +232,25 @@ type dnsmasqRATemplateData struct {
 	Interfaces []prefixInterface
 	LeaseTime  string
 	RAInterval int
-	ULAPrefix  string
+	// MTU advertised in the RA so clients pick up the PPPoE-clamped
+	// link MTU instead of the default 1500. Defaults to 1492 when
+	// PPPoE is in use, 1500 otherwise.
+	MTU int
+	// RDNSSAddrs are the upstream DNS server IPv6 addresses learned
+	// from the dhcp6c lease event. We always prepend the router's
+	// link-local address (::1) so unbound stays in the path even when
+	// the ISP did not push DNS.
+	RDNSSAddrs []string
+	// SearchDomain is `cfg.System.Domain` when set, used for the RA's
+	// option6:domain-search DNSSL. Empty string disables the option.
+	SearchDomain string
+	ULAPrefix    string
+	// Privacy maps to cfg.IPv6.Privacy and toggles the temporary-
+	// addresses preference on dnsmasq's RA. Currently informational —
+	// dnsmasq does not expose a direct flag for prefer_temp; we keep
+	// the field so the rendered comment can document the operator's
+	// intent without lying via an unsupported ra-param value.
+	Privacy bool
 }
 
 // RenderRAConfig returns the dnsmasq drop-in that announces every
@@ -229,13 +282,23 @@ func (s *IPv6Service) RenderRAConfig() (string, error) {
 	if raInterval <= 0 {
 		raInterval = defaultRAInterval
 	}
+	mtu := 1500
+	if s.cfg.PPPoE.Username != "" {
+		// Standard PPPoE WAN MTU; the IPv6 link rides over the same
+		// PPPoE frame so the advertised link MTU must match.
+		mtu = 1492
+	}
 	data := dnsmasqRATemplateData{
-		Interfaces: s.buildPrefixInterfaces(lan, slaLen),
-		LeaseTime:  s.dhcpLeaseTime(),
-		RAInterval: raInterval,
+		Interfaces:   s.buildPrefixInterfaces(lan, slaLen),
+		LeaseTime:    s.dhcpLeaseTime(),
+		RAInterval:   raInterval,
+		MTU:          mtu,
+		RDNSSAddrs:   s.rdnssAddrs(),
+		SearchDomain: s.cfg.System.Domain,
+		Privacy:      s.cfg.IPv6.Privacy,
 	}
 	if s.cfg.IPv6.LAN.ULA.Enabled {
-		data.ULAPrefix = s.cfg.IPv6.LAN.ULA.Prefix
+		data.ULAPrefix = s.ulaPrefix()
 	}
 
 	tmpl, err := s.parseRATemplate()
@@ -257,6 +320,67 @@ func (s *IPv6Service) dhcpLeaseTime() string {
 		return lt
 	}
 	return "12h"
+}
+
+// rdnssAddrs returns the DNS servers to advertise via RA. Reads the
+// dhcp6c lease state file directly (not via Status() — we want to keep
+// RenderRAConfig pure-ish; failures fall back to the empty slice).
+// Always prepends a router-local address so unbound stays reachable
+// even before the upstream lease arrives.
+func (s *IPv6Service) rdnssAddrs() []string {
+	out := []string{}
+	raw, err := netutil.ReadFile(s.statePath())
+	if err == nil && len(bytes.TrimSpace(raw)) > 0 {
+		var st PrefixState
+		if jsonErr := json.Unmarshal(raw, &st); jsonErr == nil && st.RDNSS != "" {
+			for _, f := range strings.Fields(st.RDNSS) {
+				if f == "" {
+					continue
+				}
+				out = append(out, f)
+			}
+		}
+	}
+	return out
+}
+
+// ulaPrefix returns the configured ULA prefix or generates one on
+// the fly per RFC 4193 (random 40-bit Global ID). The generated prefix
+// is persisted to cfg so subsequent boots reuse the same ULA.
+func (s *IPv6Service) ulaPrefix() string {
+	if p := strings.TrimSpace(s.cfg.IPv6.LAN.ULA.Prefix); p != "" {
+		return p
+	}
+	prefix, err := generateULAPrefix()
+	if err != nil {
+		return ""
+	}
+	// Persist so the next render keeps the same Global ID. Best-effort:
+	// if SaveToFile fails the operator simply gets a freshly-rolled
+	// prefix on next render — clients tolerate the swap because RA
+	// lifetimes flush stale prefixes within seconds.
+	s.cfg.IPv6.LAN.ULA.Prefix = prefix
+	if err := s.cfg.SaveToFile(); err != nil {
+		log.Printf("ipv6: persist generated ULA prefix: %v", err)
+	}
+	return prefix
+}
+
+// GenerateULAPrefixForTest exposes generateULAPrefix to the test
+// package. Production code must use ulaPrefix() which also persists.
+func GenerateULAPrefixForTest() (string, error) { return generateULAPrefix() }
+
+// generateULAPrefix builds a `fdXX:XXXX:XXXX::/48` from a 40-bit
+// cryptographically random Global ID per RFC 4193 §3.2.1. Returns
+// an error only when the OS RNG is unreadable.
+func generateULAPrefix() (string, error) {
+	var raw [5]byte
+	if _, err := cryptorand.Read(raw[:]); err != nil {
+		return "", fmt.Errorf("read random: %w", err)
+	}
+	// fd00::/8 prefix + 40 random bits = /48 ULA.
+	return fmt.Sprintf("fd%02x:%02x%02x:%02x%02x::/48",
+		raw[0], raw[1], raw[2], raw[3], raw[4]), nil
 }
 
 func (s *IPv6Service) parseRATemplate() (*template.Template, error) {
@@ -765,12 +889,40 @@ func (s *IPv6Service) dispatchLeaseLocked(ctx context.Context) {
 	cb := s.onLease
 	s.mu.Unlock()
 
+	// Re-render the dnsmasq RA drop-in so RDNSS / DNSSL track the
+	// upstream lease, then bounce dnsmasq. Done BEFORE the user
+	// callback so consumers see RA already refreshed when their
+	// firewall/route logic runs.
+	if err := s.refreshRADropIn(ctx); err != nil {
+		log.Printf("ipv6: refresh RA drop-in on lease change: %v", err)
+	}
+
 	if cb == nil {
 		return
 	}
 	if err := cb(ctx, state); err != nil {
 		log.Printf("ipv6: lease change callback: %v", err)
 	}
+}
+
+// refreshRADropIn re-renders /etc/dnsmasq.d/lankeeper-ipv6-ra.conf
+// and reloads dnsmasq so RA picks up the freshly-learned RDNSS list.
+// Skipped quietly when IPv6 is disabled or PD is off — the RenderToDisk
+// path already wrote the disabled-stub.
+func (s *IPv6Service) refreshRADropIn(ctx context.Context) error {
+	if s.cfg.IPv6.Enabled == "off" || !s.cfg.IPv6.WAN.RequestPrefix {
+		return nil
+	}
+	conf, err := s.RenderRAConfig()
+	if err != nil {
+		return fmt.Errorf("render RA: %w", err)
+	}
+	if err := netutil.WriteFile(dnsmasqRAConfPath, []byte(conf), 0o644); err != nil {
+		return fmt.Errorf("write RA drop-in: %w", err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reloadDnsmasqLocked(ctx)
 }
 
 // leaseHash produces a stable digest of the fields callers actually

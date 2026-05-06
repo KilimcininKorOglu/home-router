@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/KilimcininKorOglu/lankeeper/internal/config"
 	"github.com/KilimcininKorOglu/lankeeper/internal/i18n"
@@ -38,20 +40,39 @@ func (h *IPv6Handler) HandlePage(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ipv6 announced: %v", err)
 	}
 
+	expiresIn := state.ExpiresIn()
+	expiresInText := ""
+	if expiresIn > 0 {
+		// Display in minutes when below an hour, otherwise hours+minutes.
+		if expiresIn < time.Hour {
+			expiresInText = fmt.Sprintf("%dm", int(expiresIn.Minutes()))
+		} else {
+			expiresInText = fmt.Sprintf("%dh%dm",
+				int(expiresIn.Hours()),
+				int(expiresIn.Minutes())%60)
+		}
+	}
+
 	data := &tmpl.PageData{
 		Lang: lang,
 		Page: "ipv6",
 		Data: map[string]any{
-			"State":     state,
-			"Active":    state.Active(),
-			"CIDR":      state.CIDR(),
-			"AgeMin":    int(state.PrefixAge().Minutes()),
-			"WAN":       h.cfg.IPv6.WAN,
-			"LAN":       h.cfg.IPv6.LAN,
-			"Enabled":   h.cfg.IPv6.Enabled,
-			"Mode":      h.cfg.IPv6.Mode,
-			"PPPoEUsed": h.cfg.PPPoE.Username != "",
-			"Announced": announced,
+			"State":         state,
+			"Active":        state.Active(),
+			"Expired":       state.Expired(),
+			"ExpiresIn":     expiresInText,
+			"CIDR":          state.CIDR(),
+			"AgeMin":        int(state.PrefixAge().Minutes()),
+			"WAN":           h.cfg.IPv6.WAN,
+			"LAN":           h.cfg.IPv6.LAN,
+			"Enabled":       h.cfg.IPv6.Enabled,
+			"Mode":          h.cfg.IPv6.Mode,
+			"PPPoEUsed":     h.cfg.PPPoE.Username != "",
+			"Announced":     announced,
+			"ULAPrefix":     h.cfg.IPv6.LAN.ULA.Prefix,
+			"ULAEnabled":    h.cfg.IPv6.LAN.ULA.Enabled,
+			"RDNSSAddrs":    strings.Fields(state.RDNSS),
+			"SearchDomain":  h.cfg.System.Domain,
 		},
 	}
 
