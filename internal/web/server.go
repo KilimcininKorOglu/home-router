@@ -39,6 +39,7 @@ type Server struct {
 	ntph      *handlers.NTPHandler
 	vlan      *handlers.VLANHandler
 	pppoe     *handlers.PPPoEHandler
+	ipv6      *handlers.IPv6Handler
 	health    *handlers.HealthCheckHandler
 	sse       *SSEBroker
 	monitor   *services.MonitorService
@@ -110,6 +111,7 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 	// is restarted on every (re)connect and torn down on disconnect.
 	pppoeSvc.SetOnConnect(func(ctx context.Context) error { return ipv6Svc.Restart(ctx) })
 	pppoeSvc.SetOnDisconnect(func(ctx context.Context) error { return ipv6Svc.Stop(ctx) })
+	ipv6Handler := handlers.NewIPv6Handler(renderer, cfg, ipv6Svc)
 
 	backupSvc := services.NewBackupService("/etc/lankeeper")
 	monitorSvc := services.NewMonitorService()
@@ -136,6 +138,7 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 		nas:       nasHandler,
 		vlan:      vlanHandler,
 		pppoe:     pppoeHandler,
+		ipv6:      ipv6Handler,
 		health:    healthHandler,
 		storageh:  storageHandler,
 		syslogh:   syslogHandler,
@@ -295,6 +298,12 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 	mux.Handle("GET /dhcp", authed(http.HandlerFunc(s.dhcp.HandlePage)))
 	mux.Handle("POST /dhcp/static", authed(http.HandlerFunc(s.dhcp.HandleAddStatic)))
 	mux.Handle("DELETE /dhcp/static/{index}", authed(http.HandlerFunc(s.dhcp.HandleDeleteStatic)))
+	mux.Handle("GET /ipv6", authed(http.HandlerFunc(s.ipv6.HandlePage)))
+	mux.Handle("POST /ipv6/save", authed(http.HandlerFunc(s.ipv6.HandleSave)))
+	mux.Handle("POST /ipv6/renew", authed(http.HandlerFunc(s.ipv6.HandleRenew)))
+	mux.Handle("POST /ipv6/release", authed(http.HandlerFunc(s.ipv6.HandleRelease)))
+	mux.Handle("POST /ipv6/start", authed(http.HandlerFunc(s.ipv6.HandleStart)))
+	mux.Handle("POST /ipv6/stop", authed(http.HandlerFunc(s.ipv6.HandleStop)))
 	mux.Handle("GET /qos", authed(http.HandlerFunc(s.qos.HandlePage)))
 	mux.Handle("POST /qos/apply", authed(http.HandlerFunc(s.qos.HandleApply)))
 	mux.Handle("POST /qos/clear", authed(http.HandlerFunc(s.qos.HandleClear)))

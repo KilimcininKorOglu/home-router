@@ -1,0 +1,126 @@
+{{ define "content" }}
+<div class="content-header">
+    <h1>{{ t .Lang "ipv6.title" }}</h1>
+</div>
+<div class="content-body">
+    {{ with .Data }}
+
+    <!-- Status card -->
+    <div class="card" style="margin-bottom:var(--space-lg);">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "ipv6.status" }}</span>
+            <div style="display:flex; gap:var(--space-sm);">
+                {{ if .Active }}
+                    <span class="badge badge-success">{{ t $.Lang "ipv6.active" }}</span>
+                {{ else }}
+                    <span class="badge badge-error">{{ t $.Lang "ipv6.inactive" }}</span>
+                {{ end }}
+            </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-md); padding:var(--space-md) 0;">
+            <div>
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.delegatedPrefix" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-md); margin-top:var(--space-xs);">
+                    {{ if .CIDR }}{{ .CIDR }}{{ else }}—{{ end }}
+                </div>
+            </div>
+            <div>
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.lastEvent" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-md); margin-top:var(--space-xs);">
+                    {{ if .State.Reason }}{{ .State.Reason }}{{ else }}—{{ end }}
+                    {{ if gt .AgeMin 0 }}<span style="color:var(--text-tertiary); font-size:var(--font-xs);">({{ .AgeMin }}m)</span>{{ end }}
+                </div>
+            </div>
+            <div>
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.preferredLifetime" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-md); margin-top:var(--space-xs);">
+                    {{ if .State.PreferredLifetime }}{{ .State.PreferredLifetime }}s{{ else }}—{{ end }}
+                </div>
+            </div>
+            <div>
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.validLifetime" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-md); margin-top:var(--space-xs);">
+                    {{ if .State.ValidLifetime }}{{ .State.ValidLifetime }}s{{ else }}—{{ end }}
+                </div>
+            </div>
+            {{ if .State.RDNSS }}
+            <div style="grid-column:1/-1;">
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.rdnss" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-sm); margin-top:var(--space-xs);">{{ .State.RDNSS }}</div>
+            </div>
+            {{ end }}
+        </div>
+        <div style="display:flex; gap:var(--space-sm); padding-top:var(--space-md); border-top:1px solid var(--border-color);">
+            <button class="btn btn-primary btn-sm" hx-post="/ipv6/renew" hx-swap="none">
+                {{ t $.Lang "ipv6.renew" }}
+            </button>
+            <button class="btn btn-secondary btn-sm" hx-post="/ipv6/start" hx-swap="none">
+                {{ t $.Lang "ipv6.start" }}
+            </button>
+            <button class="btn btn-secondary btn-sm" hx-post="/ipv6/stop" hx-swap="none"
+                    hx-confirm="{{ t $.Lang "common.confirm" }}">
+                {{ t $.Lang "ipv6.stop" }}
+            </button>
+            <button class="btn btn-danger btn-sm" hx-post="/ipv6/release" hx-swap="none"
+                    hx-confirm="{{ t $.Lang "common.confirm" }}">
+                {{ t $.Lang "ipv6.release" }}
+            </button>
+        </div>
+    </div>
+
+    <!-- WAN configuration -->
+    <div class="card" style="margin-bottom:var(--space-lg);">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "ipv6.wanConfig" }}</span>
+            {{ if .PPPoEUsed }}
+                <span class="badge badge-info" title="{{ t $.Lang "ipv6.usingPPPoE" }}">ppp0</span>
+            {{ end }}
+        </div>
+        <form hx-post="/ipv6/save" hx-swap="none" style="padding-top:var(--space-md);">
+            <div class="input-group" style="margin-bottom:var(--space-md);">
+                <label class="input-label">{{ t $.Lang "ipv6.enabledMode" }}</label>
+                <select class="input" name="enabled">
+                    <option value="auto" {{ if eq .Enabled "auto" }}selected{{ end }}>{{ t $.Lang "ipv6.modeAuto" }}</option>
+                    <option value="on" {{ if eq .Enabled "on" }}selected{{ end }}>{{ t $.Lang "ipv6.modeOn" }}</option>
+                    <option value="off" {{ if eq .Enabled "off" }}selected{{ end }}>{{ t $.Lang "ipv6.modeOff" }}</option>
+                </select>
+            </div>
+            <div class="input-group" style="margin-bottom:var(--space-md);">
+                <label style="display:flex; align-items:center; gap:var(--space-sm);">
+                    <input type="checkbox" name="requestPrefix" {{ if .WAN.RequestPrefix }}checked{{ end }}>
+                    {{ t $.Lang "ipv6.requestPrefix" }}
+                </label>
+                <div style="color:var(--text-tertiary); font-size:var(--font-xs); margin-top:var(--space-xs);">
+                    {{ t $.Lang "ipv6.requestPrefixHelp" }}
+                </div>
+            </div>
+            <div class="input-group" style="margin-bottom:var(--space-md);">
+                <label class="input-label">{{ t $.Lang "ipv6.prefixHint" }}</label>
+                <select class="input" name="prefixHint">
+                    {{ $hint := .WAN.PrefixHint }}
+                    <option value="/48" {{ if eq $hint "/48" }}selected{{ end }}>/48</option>
+                    <option value="/52" {{ if eq $hint "/52" }}selected{{ end }}>/52</option>
+                    <option value="/56" {{ if eq $hint "/56" }}selected{{ end }}>/56</option>
+                    <option value="/60" {{ if eq $hint "/60" }}selected{{ end }}>/60</option>
+                    <option value="/64" {{ if eq $hint "/64" }}selected{{ end }}>/64</option>
+                </select>
+                <div style="color:var(--text-tertiary); font-size:var(--font-xs); margin-top:var(--space-xs);">
+                    {{ t $.Lang "ipv6.prefixHintHelp" }}
+                </div>
+            </div>
+            <div class="input-group" style="margin-bottom:var(--space-md);">
+                <label style="display:flex; align-items:center; gap:var(--space-sm);">
+                    <input type="checkbox" name="rapidCommit" {{ if .WAN.RapidCommit }}checked{{ end }}>
+                    {{ t $.Lang "ipv6.rapidCommit" }}
+                </label>
+                <div style="color:var(--text-tertiary); font-size:var(--font-xs); margin-top:var(--space-xs);">
+                    {{ t $.Lang "ipv6.rapidCommitHelp" }}
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">{{ t $.Lang "common.save" }}</button>
+        </form>
+    </div>
+
+    {{ end }}
+</div>
+{{ end }}
