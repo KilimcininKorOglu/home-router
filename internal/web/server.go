@@ -47,6 +47,7 @@ type Server struct {
 	// flooded with qos-clients payloads they will not render.
 	qosSse    *SSEBroker
 	qosSvc    *services.QoSService
+	vpnSvc    *services.VPNService
 	monitor   *services.MonitorService
 	dhcpSvc   *services.DHCPService
 	ipv6Svc   *services.IPv6Service
@@ -200,6 +201,7 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 		sse:       sseBroker,
 		qosSse:    qosBroker,
 		qosSvc:    qosSvc,
+		vpnSvc:    vpnSvc,
 		monitor:   monitorSvc,
 		ipv6Svc:   ipv6Svc,
 		// 1 probe/sec, burst 2 — comfortable for a single admin
@@ -268,6 +270,11 @@ func (s *Server) Serve(ctx context.Context) error {
 		2*time.Second,
 		30,
 	)
+
+	// Garbage-collect expired site-to-site invite tokens. The
+	// ticker also sweeps once on startup so a long downtime does
+	// not leave stale pending peers visible in the UI.
+	s.vpnSvc.StartInviteGC(ctx, 5*time.Minute)
 
 	go func() {
 		<-ctx.Done()
@@ -391,6 +398,13 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 	mux.Handle("POST /vpn/server/stop", authed(http.HandlerFunc(s.vpn.HandleServerStop)))
 	mux.Handle("POST /vpn/client/{name}/connect", authed(http.HandlerFunc(s.vpn.HandleConnectClient)))
 	mux.Handle("POST /vpn/client/{name}/disconnect", authed(http.HandlerFunc(s.vpn.HandleDisconnectClient)))
+	mux.Handle("GET /vpn/s2s", authed(http.HandlerFunc(s.vpn.HandleS2SWizardPage)))
+	mux.Handle("POST /vpn/s2s/invite", authed(http.HandlerFunc(s.vpn.HandleS2SInvite)))
+	mux.Handle("POST /vpn/s2s/join", authed(http.HandlerFunc(s.vpn.HandleS2SJoin)))
+	mux.Handle("POST /vpn/s2s/finalize", authed(http.HandlerFunc(s.vpn.HandleS2SFinalize)))
+	mux.Handle("DELETE /vpn/s2s/{name}", authed(http.HandlerFunc(s.vpn.HandleS2SCancel)))
+	mux.Handle("GET /vpn/s2s/{name}/health", authed(http.HandlerFunc(s.vpn.HandleS2SHealth)))
+	mux.Handle("POST /vpn/s2s/{name}/reachability", authed(http.HandlerFunc(s.vpn.HandleS2SReachability)))
 	mux.Handle("GET /openvpn", authed(http.HandlerFunc(s.ovpn.HandlePage)))
 	mux.Handle("POST /openvpn/init-pki", authed(http.HandlerFunc(s.ovpn.HandleInitPKI)))
 	mux.Handle("POST /openvpn/server/start", authed(http.HandlerFunc(s.ovpn.HandleServerStart)))
