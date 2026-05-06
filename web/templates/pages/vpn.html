@@ -36,10 +36,11 @@
         {{ end }}
         {{ end }}
 
-        <div style="margin-top:var(--space-md);">
+        <div style="margin-top:var(--space-md); display:flex; gap:var(--space-sm);">
             <button class="btn btn-primary btn-sm" onclick="document.getElementById('peer-form').style.display='block'">
                 {{ t $.Lang "vpn.addPeer" }}
             </button>
+            <a class="btn btn-secondary btn-sm" href="/vpn/s2s">{{ t $.Lang "vpn.s2s.openWizard" }}</a>
         </div>
         <form id="peer-form" hx-post="/vpn/server/peer" style="display:none; padding:var(--space-md); border:1px solid var(--border-color); border-radius:var(--radius-md); margin-top:var(--space-md);"
               hx-on::after-request="this.reset(); this.style.display='none';">

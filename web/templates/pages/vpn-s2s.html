@@ -1,0 +1,125 @@
+{{ define "content" }}
+<div class="content-header">
+    <h1>{{ t .Lang "vpn.s2s.title" }}</h1>
+    <a href="/vpn" class="btn btn-secondary btn-sm">{{ t .Lang "common.back" }}</a>
+</div>
+<div class="content-body">
+    {{ with .Data }}
+
+    <!-- Originator (issue token) -->
+    <div class="card" style="margin-bottom:var(--space-lg);">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "vpn.s2s.issue.title" }}</span>
+            <span style="color:var(--text-secondary); font-size:var(--font-sm);">{{ t $.Lang "vpn.s2s.issue.subtitle" }}</span>
+        </div>
+        <form id="s2s-issue-form" style="padding-top:var(--space-md);">
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:var(--space-md);">
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "vpn.s2s.peerName" }}</label>
+                    <input class="input" name="name" required placeholder="{{ t $.Lang "vpn.s2s.peerNamePlaceholder" }}">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "vpn.s2s.siteName" }}</label>
+                    <input class="input" name="siteName" placeholder="{{ t $.Lang "vpn.s2s.siteNamePlaceholder" }}">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "vpn.s2s.endpoint" }}</label>
+                    <input class="input" name="endpoint" required placeholder="203.0.113.5:51820">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">{{ t $.Lang "vpn.s2s.remoteSubnets" }}</label>
+                    <input class="input" name="remoteSubnets" required placeholder="192.168.5.0/24">
+                </div>
+            </div>
+            <div style="display:flex; gap:var(--space-sm); margin-top:var(--space-md);">
+                <button type="submit" class="btn btn-primary btn-sm">{{ t $.Lang "vpn.s2s.createInvite" }}</button>
+            </div>
+        </form>
+
+        <div id="s2s-invite-result" style="display:none; margin-top:var(--space-md); padding:var(--space-md); border:1px solid var(--border-color); border-radius:var(--radius-md);">
+            <div style="font-weight:700; margin-bottom:var(--space-xs);">{{ t $.Lang "vpn.s2s.tokenReady" }}</div>
+            <div style="color:var(--text-secondary); font-size:var(--font-sm); margin-bottom:var(--space-sm);">{{ t $.Lang "vpn.s2s.tokenInstructions" }}</div>
+            <textarea id="s2s-invite-token" readonly rows="6" style="width:100%; font-family:var(--font-mono); font-size:var(--font-xs);"></textarea>
+            <div style="display:flex; gap:var(--space-sm); margin-top:var(--space-sm);">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="vpnS2S.copyToken()">{{ t $.Lang "common.copy" }}</button>
+                <span id="s2s-token-expires" style="color:var(--text-secondary); font-size:var(--font-xs); align-self:center;"></span>
+            </div>
+
+            <div style="margin-top:var(--space-md); padding-top:var(--space-md); border-top:1px solid var(--border-color);">
+                <div style="font-weight:700; margin-bottom:var(--space-xs);">{{ t $.Lang "vpn.s2s.pasteAck" }}</div>
+                <form id="s2s-finalize-form">
+                    <input type="hidden" name="peerName" id="s2s-finalize-peer">
+                    <textarea name="ackToken" required rows="6" style="width:100%; font-family:var(--font-mono); font-size:var(--font-xs);" placeholder="{{ t $.Lang "vpn.s2s.ackPlaceholder" }}"></textarea>
+                    <div style="display:flex; gap:var(--space-sm); margin-top:var(--space-sm);">
+                        <button type="submit" class="btn btn-primary btn-sm">{{ t $.Lang "vpn.s2s.finalize" }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Joining side (consume token) -->
+    <div class="card" style="margin-bottom:var(--space-lg);">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "vpn.s2s.join.title" }}</span>
+            <span style="color:var(--text-secondary); font-size:var(--font-sm);">{{ t $.Lang "vpn.s2s.join.subtitle" }}</span>
+        </div>
+        <form id="s2s-join-form" style="padding-top:var(--space-md);">
+            <div class="input-group">
+                <label class="input-label">{{ t $.Lang "vpn.s2s.inviteToken" }}</label>
+                <textarea name="token" required rows="6" style="width:100%; font-family:var(--font-mono); font-size:var(--font-xs);" placeholder="{{ t $.Lang "vpn.s2s.invitePlaceholder" }}"></textarea>
+            </div>
+            <div style="display:flex; gap:var(--space-sm); margin-top:var(--space-md);">
+                <button type="submit" class="btn btn-primary btn-sm">{{ t $.Lang "vpn.s2s.consume" }}</button>
+            </div>
+        </form>
+
+        <div id="s2s-join-result" style="display:none; margin-top:var(--space-md); padding:var(--space-md); border:1px solid var(--border-color); border-radius:var(--radius-md);">
+            <div style="font-weight:700; margin-bottom:var(--space-xs);">{{ t $.Lang "vpn.s2s.ackReady" }}</div>
+            <div style="color:var(--text-secondary); font-size:var(--font-sm); margin-bottom:var(--space-sm);">{{ t $.Lang "vpn.s2s.ackInstructions" }}</div>
+            <textarea id="s2s-ack-token" readonly rows="6" style="width:100%; font-family:var(--font-mono); font-size:var(--font-xs);"></textarea>
+            <div style="display:flex; gap:var(--space-sm); margin-top:var(--space-sm);">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="vpnS2S.copyAck()">{{ t $.Lang "common.copy" }}</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending peers list -->
+    {{ if .Server }}
+    {{ if .Server.Peers }}
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "vpn.s2s.pending.title" }}</span>
+        </div>
+        <div style="padding-top:var(--space-md);">
+            {{ range .Server.Peers }}
+            {{ if .IsSiteToSite }}
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:var(--space-sm) 0; border-bottom:1px solid var(--border-color);">
+                <div>
+                    <span style="font-weight:700;">{{ .Name }}</span>
+                    {{ if .Pending }}
+                        <span class="badge badge-warning" style="margin-left:var(--space-xs);">{{ t $.Lang "vpn.s2s.pendingBadge" }}</span>
+                    {{ else }}
+                        <span class="badge badge-success" style="margin-left:var(--space-xs);">{{ t $.Lang "vpn.status.active" }}</span>
+                    {{ end }}
+                    <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ .AllowedIPs }}</div>
+                </div>
+                <div style="display:flex; gap:var(--space-sm);">
+                    {{ if .Pending }}
+                    <button class="btn btn-danger btn-sm" hx-delete="/vpn/s2s/{{ .Name }}" hx-swap="none">{{ t $.Lang "common.cancel" }}</button>
+                    {{ else }}
+                    <button class="btn btn-secondary btn-sm" onclick="vpnS2S.testReachability('{{ .Name }}')">{{ t $.Lang "vpn.s2s.testButton" }}</button>
+                    {{ end }}
+                </div>
+            </div>
+            {{ end }}
+            {{ end }}
+        </div>
+    </div>
+    {{ end }}
+    {{ end }}
+
+    {{ end }}
+</div>
+<script src="/static/js/vpn-s2s.js"></script>
+{{ end }}
