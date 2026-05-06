@@ -62,34 +62,93 @@
         {{ end }}
     </div>
 
-    <!-- DoT Upstream -->
+    <!-- DNS Encryption Mode (Plain / DoT / DoH) -->
     <div class="card" style="margin-top:var(--space-lg);">
         <div class="card-header">
-            <span class="card-title">{{ t $.Lang "dns.dot" }}</span>
+            <span class="card-title">{{ t $.Lang "dns.encryption.title" }}</span>
         </div>
         <form hx-post="/dns/dot" hx-swap="none" style="display:flex; flex-direction:column; gap:var(--space-md);">
-            <label style="display:flex; gap:var(--space-xs);">
-                <input type="checkbox" name="enable_dot" {{ if .DoTEnabled }}checked{{ end }}>
-                <span>{{ t $.Lang "dns.dotEnable" }}</span>
-            </label>
-            <label>
-                <div class="input-label">{{ t $.Lang "dns.dotUpstream" }}</div>
-                <input class="input" name="dot_upstream" id="dot-upstream-input" value="{{ .DoTUpstream }}" placeholder="1.1.1.1@853#cloudflare-dns.com">
-                <div style="font-size:var(--font-xs); color:var(--text-secondary); margin-top:var(--space-xs);">{{ t $.Lang "dns.dotHint" }}</div>
-            </label>
-            <div style="display:flex; gap:var(--space-sm); align-items:center;">
+            {{ $mode := "plain" }}{{ if .DoTEnabled }}{{ $mode = "dot" }}{{ else if .DoHEnabled }}{{ $mode = "doh" }}{{ end }}
+            <div role="radiogroup" style="display:flex; gap:var(--space-md); flex-wrap:wrap;">
+                <label style="display:flex; gap:var(--space-xs);">
+                    <input type="radio" name="encryption_mode" value="plain" onclick="lankeeperDNSMode('plain')" {{ if eq $mode "plain" }}checked{{ end }}>
+                    <span>{{ t $.Lang "dns.encryption.plain" }}</span>
+                </label>
+                <label style="display:flex; gap:var(--space-xs);">
+                    <input type="radio" name="encryption_mode" value="dot" onclick="lankeeperDNSMode('dot')" {{ if eq $mode "dot" }}checked{{ end }}>
+                    <span>{{ t $.Lang "dns.encryption.dot" }}</span>
+                </label>
+                <label style="display:flex; gap:var(--space-xs);">
+                    <input type="radio" name="encryption_mode" value="doh" onclick="lankeeperDNSMode('doh')" {{ if eq $mode "doh" }}checked{{ end }}>
+                    <span>{{ t $.Lang "dns.encryption.doh" }}</span>
+                </label>
+            </div>
+
+            <div data-mode-section="dot" style="{{ if ne $mode "dot" }}display:none;{{ end }}">
+                <label>
+                    <div class="input-label">{{ t $.Lang "dns.dotUpstream" }}</div>
+                    <input class="input" name="dot_upstream" id="dot-upstream-input" value="{{ .DoTUpstream }}" placeholder="1.1.1.1@853#cloudflare-dns.com">
+                    <div style="font-size:var(--font-xs); color:var(--text-secondary); margin-top:var(--space-xs);">{{ t $.Lang "dns.dotHint" }}</div>
+                </label>
+                <div style="display:flex; gap:var(--space-sm); align-items:center; margin-top:var(--space-sm);">
+                    <button class="btn btn-secondary btn-sm" type="button"
+                            hx-post="/dns/dot/probe"
+                            hx-include="#dot-upstream-input"
+                            hx-target="#dot-probe-result"
+                            hx-swap="innerHTML">
+                        {{ t $.Lang "dns.dotProbe" }}
+                    </button>
+                    <span id="dot-probe-result"></span>
+                </div>
+            </div>
+
+            <div data-mode-section="doh" style="{{ if ne $mode "doh" }}display:none;{{ end }}">
+                <label>
+                    <div class="input-label">{{ t $.Lang "dns.doh.upstream" }}</div>
+                    <select class="input" id="doh-preset" onchange="lankeeperDoHPreset(this.value)">
+                        <option value="custom">{{ t $.Lang "dns.doh.custom" }}</option>
+                        {{ range .DoHResolvers }}
+                        <option value="{{ .Name }}" {{ if eq $.Data.DoHUpstream .Name }}selected{{ end }}>{{ .Description }}</option>
+                        {{ end }}
+                    </select>
+                    <input class="input" name="doh_upstream" id="doh-upstream-input" value="{{ .DoHUpstream }}" placeholder="https://cloudflare-dns.com/dns-query" style="margin-top:var(--space-sm);">
+                    <div style="font-size:var(--font-xs); color:var(--text-secondary); margin-top:var(--space-xs);">{{ t $.Lang "dns.doh.hint" }}</div>
+                </label>
+                <div style="display:flex; gap:var(--space-sm); align-items:center; margin-top:var(--space-sm);">
+                    <button class="btn btn-secondary btn-sm" type="button"
+                            hx-post="/dns/doh/probe"
+                            hx-include="#doh-upstream-input"
+                            hx-target="#doh-probe-result"
+                            hx-swap="innerHTML">
+                        {{ t $.Lang "dns.doh.probe" }}
+                    </button>
+                    <span id="doh-probe-result"></span>
+                </div>
+            </div>
+
+            <div>
                 <button class="btn btn-primary btn-sm" type="submit">{{ t $.Lang "common.save" }}</button>
-                <button class="btn btn-secondary btn-sm" type="button"
-                        hx-post="/dns/dot/probe"
-                        hx-include="#dot-upstream-input"
-                        hx-target="#dot-probe-result"
-                        hx-swap="innerHTML">
-                    {{ t $.Lang "dns.dotProbe" }}
-                </button>
-                <span id="dot-probe-result"></span>
             </div>
         </form>
     </div>
+
+    <script>
+    function lankeeperDNSMode(mode) {
+        document.querySelectorAll('[data-mode-section]').forEach(function (s) {
+            s.style.display = (s.getAttribute('data-mode-section') === mode) ? '' : 'none';
+        });
+    }
+    function lankeeperDoHPreset(value) {
+        var input = document.getElementById('doh-upstream-input');
+        if (!input) return;
+        if (value === 'custom') {
+            input.removeAttribute('readonly');
+            return;
+        }
+        input.value = value;
+        input.setAttribute('readonly', 'readonly');
+    }
+    </script>
 
     <!-- Local DNS Records -->
     <div class="card" style="margin-top:var(--space-lg);">
