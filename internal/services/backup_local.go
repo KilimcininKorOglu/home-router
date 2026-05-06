@@ -25,6 +25,12 @@ const LocalBackupRoot = "/var/lib/lankeeper/backups/"
 // code never assigns to it.
 var backupRootForTesting = LocalBackupRoot
 
+// SetBackupRootForTesting is the cross-package test hook for
+// backup_orchestration_test.go (which lives in services_test, so
+// it cannot touch the unexported variable directly). Production
+// callers must NEVER invoke this.
+func SetBackupRootForTesting(root string) { backupRootForTesting = root }
+
 // validateLocalPath returns the cleaned absolute path or an error.
 // Empty defaults to the configured root. Trailing-slash normalised
 // so the prefix check below cannot be bypassed by trickery.
