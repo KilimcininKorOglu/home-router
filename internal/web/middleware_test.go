@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/KilimcininKorOglu/lankeeper/internal/web"
@@ -70,6 +71,12 @@ func TestSecurityHeaders(t *testing.T) {
 	csp := rec.Header().Get("Content-Security-Policy")
 	if csp == "" {
 		t.Error("CSP header should be set")
+	}
+	// frame-ancestors 'none' must be present so CSP-conforming
+	// browsers keep clickjacking protection even if they ignore the
+	// (now-obsolete) X-Frame-Options header.
+	if !strings.Contains(csp, "frame-ancestors 'none'") {
+		t.Errorf("CSP missing frame-ancestors 'none', got %q", csp)
 	}
 
 	xcto := rec.Header().Get("X-Content-Type-Options")
