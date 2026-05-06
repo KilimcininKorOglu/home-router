@@ -24,6 +24,7 @@ var allowedCommands = map[string]bool{
 	"cp": true, "chmod": true, "mv": true, "rm": true, "kill": true,
 	"openssl": true, "usermod": true, "localectl": true, "loadkeys": true,
 	"easyrsa": true, "mkdir": true, "tail": true, "update-grub": true,
+	"dhcp6c": true, "dhcp6ctl": true,
 }
 
 type pathRuleKind int
@@ -52,8 +53,10 @@ var allowedWriteRules = []pathRule{
 	{"/etc/rsyslog.d/", dirPrefix},
 	{"/etc/lankeeper/", dirPrefix},
 	{"/etc/default/grub.d/", dirPrefix},
+	{"/etc/wide-dhcpv6/", dirPrefix},
 	{"/etc/fstab", exactFile},
 	{"/etc/pppoe-server-options", exactFile},
+	{"/var/lib/lankeeper/", dirPrefix},
 	{"/var/log/", dirPrefix},
 	{"/tmp/nftables-", filenamePrefix},
 	{"/tmp/lankeeper-", filenamePrefix},
@@ -70,7 +73,9 @@ var allowedReadRules = []pathRule{
 	{"/etc/samba/", dirPrefix},
 	{"/etc/chrony/", dirPrefix},
 	{"/etc/rsyslog.d/", dirPrefix},
+	{"/etc/wide-dhcpv6/", dirPrefix},
 	{"/etc/fstab", exactFile},
+	{"/var/lib/lankeeper/", dirPrefix},
 	{"/var/log/", dirPrefix},
 	{"/var/run/", dirPrefix},
 	{"/proc/mdstat", exactFile},

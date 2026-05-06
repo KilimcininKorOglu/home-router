@@ -1,0 +1,21 @@
+[Unit]
+Description=LANKeeper DHCPv6 Prefix Delegation Client (wide-dhcpv6)
+# Conflict with the Debian-shipped wide-dhcpv6-client unit so the two
+# never race for /var/run/dhcp6c.pid.
+Conflicts=wide-dhcpv6-client.service
+After=network-online.target ppp.service
+Wants=network-online.target
+
+[Service]
+Type=forking
+PIDFile=/var/run/dhcp6c.pid
+ExecStart=/usr/sbin/dhcp6c -c /etc/wide-dhcpv6/dhcp6c.conf -P /var/run/dhcp6c.pid
+ExecStop=/bin/kill -TERM $MAINPID
+Restart=on-failure
+RestartSec=5
+
+# dhcp6c needs to bind raw sockets and run the lease hook script.
+User=root
+
+[Install]
+WantedBy=lankeeper.target

@@ -1,0 +1,42 @@
+#!/bin/sh
+# dhcp6c lease event hook — managed by LANKeeper.
+# Invoked by dhcp6c on every state change with environment variables
+# documented in dhcp6c-script(8). We persist the relevant fields to
+# {{ .StatePath }} as JSON so the LANKeeper service can serve fresh
+# status without scraping `ip -6 addr`.
+
+set -eu
+
+STATE_FILE="{{ .StatePath }}"
+STATE_DIR=$(dirname "$STATE_FILE")
+mkdir -p "$STATE_DIR"
+
+# new_pd_prefix1 / new_pd_prefix1_len: first delegated prefix.
+# new_pd_pltime1 / new_pd_vltime1: preferred / valid lifetimes (seconds).
+# new_domain_name_servers: space-separated RDNSS list (optional).
+# reason: SOLICIT, REQUEST, RENEW, REBIND, RELEASE, INFOREQ, EXIT.
+
+NOW=$(date -u +%s)
+PREFIX="${new_pd_prefix1:-}"
+PLEN="${new_pd_prefix1_len:-}"
+PLTIME="${new_pd_pltime1:-0}"
+VLTIME="${new_pd_vltime1:-0}"
+RDNSS="${new_domain_name_servers:-}"
+REASON="${reason:-unknown}"
+
+TMP=$(mktemp "$STATE_DIR/.ipv6-prefix.XXXXXX")
+cat > "$TMP" <<EOF
+{
+  "timestamp": $NOW,
+  "reason": "$REASON",
+  "prefix": "$PREFIX",
+  "prefixLength": ${PLEN:-0},
+  "preferredLifetime": $PLTIME,
+  "validLifetime": $VLTIME,
+  "rdnss": "$RDNSS"
+}
+EOF
+mv -f "$TMP" "$STATE_FILE"
+
+# Best-effort log so the operator can correlate via journalctl.
+logger -t lankeeper-dhcp6c "reason=$REASON prefix=$PREFIX/$PLEN pl=$PLTIME vl=$VLTIME"

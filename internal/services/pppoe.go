@@ -20,10 +20,31 @@ type PPPoEService struct {
 	cfg       *config.Config
 	mu        sync.RWMutex
 	connected bool
+
+	// Cross-service hooks invoked after a successful Connect / Disconnect.
+	// Used by IPv6Service to (re)start the dhcp6c PD client whenever the
+	// ppp0 interface is rebuilt. Hook errors are logged but never block
+	// the PPPoE state transition itself.
+	onConnect    func(ctx context.Context) error
+	onDisconnect func(ctx context.Context) error
 }
 
 func NewPPPoEService(cfg *config.Config) *PPPoEService {
 	return &PPPoEService{cfg: cfg}
+}
+
+// SetOnConnect registers a callback to run after every successful Connect.
+func (s *PPPoEService) SetOnConnect(fn func(ctx context.Context) error) {
+	s.mu.Lock()
+	s.onConnect = fn
+	s.mu.Unlock()
+}
+
+// SetOnDisconnect registers a callback to run after every Disconnect.
+func (s *PPPoEService) SetOnDisconnect(fn func(ctx context.Context) error) {
+	s.mu.Lock()
+	s.onDisconnect = fn
+	s.mu.Unlock()
 }
 
 type PPPoEStatus struct {
@@ -82,7 +103,14 @@ func (s *PPPoEService) Connect(ctx context.Context) error {
 
 	s.mu.Lock()
 	s.connected = true
+	hook := s.onConnect
 	s.mu.Unlock()
+
+	if hook != nil {
+		if hookErr := hook(ctx); hookErr != nil {
+			log.Printf("pppoe: onConnect hook failed: %v", hookErr)
+		}
+	}
 
 	return nil
 }
@@ -102,7 +130,14 @@ func (s *PPPoEService) Disconnect(ctx context.Context) error {
 
 	s.mu.Lock()
 	s.connected = false
+	hook := s.onDisconnect
 	s.mu.Unlock()
+
+	if hook != nil {
+		if hookErr := hook(ctx); hookErr != nil {
+			log.Printf("pppoe: onDisconnect hook failed: %v", hookErr)
+		}
+	}
 
 	return nil
 }

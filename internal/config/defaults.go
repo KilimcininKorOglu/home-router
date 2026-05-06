@@ -48,7 +48,7 @@ func DefaultConfig() *Config {
 		IPv6: IPv6Config{
 			Enabled: "auto",
 			Mode:    "dhcpv6-pd",
-			WAN:     IPv6WANConfig{AcceptRA: true, RequestPrefix: true, PrefixHint: "/56"},
+			WAN:     IPv6WANConfig{AcceptRA: true, RequestPrefix: true, PrefixHint: "/56", RapidCommit: true},
 			LAN:     IPv6LANConfig{Mode: "slaac", ULA: IPv6ULAConfig{Enabled: true, Prefix: "fd00:abcd:1234::/48"}, RAInterval: 30, RDNSS: true},
 			Privacy: true,
 		},

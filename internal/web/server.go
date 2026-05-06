@@ -43,6 +43,7 @@ type Server struct {
 	sse       *SSEBroker
 	monitor   *services.MonitorService
 	dhcpSvc   *services.DHCPService
+	ipv6Svc   *services.IPv6Service
 }
 
 func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *services.UpdateService) (*Server, error) {
@@ -104,6 +105,12 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 	ntpSvc := services.NewNTPService(cfg)
 	ntpHandler := handlers.NewNTPHandler(renderer, ntpSvc)
 
+	ipv6Svc := services.NewIPv6Service(cfg)
+	// Wire PPPoE -> IPv6 cross-service callbacks so the dhcp6c client
+	// is restarted on every (re)connect and torn down on disconnect.
+	pppoeSvc.SetOnConnect(func(ctx context.Context) error { return ipv6Svc.Restart(ctx) })
+	pppoeSvc.SetOnDisconnect(func(ctx context.Context) error { return ipv6Svc.Stop(ctx) })
+
 	backupSvc := services.NewBackupService("/etc/lankeeper")
 	monitorSvc := services.NewMonitorService()
 	dashboardHandler := handlers.NewDashboardHandler(renderer, monitorSvc, pppoeSvc, dhcpSvc)
@@ -135,6 +142,7 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 		ntph:      ntpHandler,
 		sse:       sseBroker,
 		monitor:   monitorSvc,
+		ipv6Svc:   ipv6Svc,
 	}
 
 	mux := http.NewServeMux()

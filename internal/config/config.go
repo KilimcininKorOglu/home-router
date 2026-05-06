@@ -292,7 +292,13 @@ type IPv6Config struct {
 type IPv6WANConfig struct {
 	AcceptRA      bool   `yaml:"acceptRA"`
 	RequestPrefix bool   `yaml:"requestPrefix"`
-	PrefixHint    string `yaml:"prefixHint"`
+	// PrefixHint requests a specific prefix length from the ISP via
+	// DHCPv6-PD (RFC 8415). Format: "/48", "/52", "/56", "/60", "/64".
+	// "/56" is the typical residential allocation.
+	PrefixHint string `yaml:"prefixHint"`
+	// RapidCommit enables the two-message exchange (Solicit + Reply)
+	// instead of the four-message default. Most consumer ISPs support it.
+	RapidCommit bool `yaml:"rapidCommit"`
 }
 
 type IPv6LANConfig struct {

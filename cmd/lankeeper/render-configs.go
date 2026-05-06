@@ -45,6 +45,7 @@ func runRenderConfigs() error {
 		{"ntp/chrony", services.NewNTPService(cfg).RenderToDisk},
 		{"syslog/rsyslog", services.NewSyslogService(cfg).RenderToDisk},
 		{"nas/samba", services.NewNASService(cfg).RenderToDisk},
+		{"ipv6/dhcp6c", services.NewIPv6Service(cfg).RenderToDisk},
 		{"vpn/wireguard-server", services.NewVPNService(cfg).RenderServerConfig},
 		{"vpn/wireguard-clients", services.NewVPNService(cfg).RenderAllClientConfigs},
 	}

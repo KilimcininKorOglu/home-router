@@ -1,0 +1,23 @@
+# wide-dhcpv6 client configuration — managed by LANKeeper.
+# Do not edit by hand; changes are overwritten on every config apply.
+#
+# Reference: dhcp6c.conf(5).
+
+interface {{ .WANInterface }} {
+    send ia-pd 0;
+{{- if .RapidCommit }}
+    send rapid-commit;
+{{- end }}
+    request domain-name-servers;
+    request domain-name;
+    script "{{ .ScriptPath }}";
+};
+
+# Identity Association for Prefix Delegation. The prefix length below
+# is a hint; the ISP may delegate something shorter or longer.
+id-assoc pd 0 {
+    prefix-interface {{ .LANInterface }} {
+        sla-id 0;
+        sla-len {{ .SLALen }};
+    };
+};
