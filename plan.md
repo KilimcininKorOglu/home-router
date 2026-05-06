@@ -2607,11 +2607,23 @@ v0.1.0 (2026-05-06) ile yukarıdaki 11 faz tamamlandı. Aşağıdaki başlıklar
 
 ### Sonraki adaylar (önceliksiz)
 
-- DNS-over-HTTPS upstream (Unbound 1.18+ ile native).
 - Metrik export endpoint (Prometheus formatı `/metrics`, sadece LAN-only).
+- DoH SERVER (Unbound 1.20+ ile clientler 443'te LANKeeper'a DoH
+  yapsın). TLS sertifika yönetimi mevcut `EnsureTLSCert` ile
+  uyumlu; ayrı feature olarak takip.
 
 ### Tamamlananlar
 
+- DNS-over-HTTPS upstream — `/dns` sayfasında "DNS Şifreleme Modu"
+  kartı: Plain / DoT / DoH radyosuyla seçim. Unbound DoH upstream'i
+  HİÇBİR sürümde desteklemediği için (NLnetLabs/unbound#525 hâlâ
+  açık), `dnscrypt-proxy` Debian paketi 5. dep olarak değil sistem
+  paketi olarak install edilir; 127.0.0.1:5353'te localhost-only
+  dinler ve Unbound `forward-zone "."` ile oraya yönlendirir. 10
+  hazır sağlayıcı (Cloudflare/Quad9/Google/AdGuard/Mullvad) +
+  `https://host/dns-query` URL veya `sdns://` stamp özel girişi.
+  SSRF guard, port allowlist, char allowlist; native `dnsmessage`
+  ile probe (5s outer timeout). DoT ile mutex.
 - Backup snapshot scheduling — `/backup` sayfası ile cron-bazlı
   otomatik şifreli dışa aktarım. Local + S3-uyumlu (SigV4 native,
   aws-sdk-go yok) + SFTP (`pkg/sftp` 5. direct dep) hedefleri,

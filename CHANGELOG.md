@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **(dns) DNS-over-HTTPS upstream**: a new `/dns` encryption-mode
+  card lets the operator pick Plain (recursive) / DoT / DoH for
+  upstream resolution. DoH support routes through a
+  `dnscrypt-proxy` stub on `127.0.0.1:5353` (Unbound itself does
+  not implement DoH upstream in any version, so a stub daemon is
+  required); the proxy is installed by `apt install dnscrypt-proxy`
+  but stays disabled until the operator selects DoH. Built-in
+  resolver catalogue covers Cloudflare (3 filter tiers), Quad9
+  (filter + nofilter), Google, AdGuard (filter + unfiltered),
+  NextDNS placeholder and Mullvad. Custom upstreams accept an
+  `https://host/dns-query` URL or a `sdns://` stamp; both go
+  through SSRF guard (internal-IP rejection), a 443/4443/8443
+  port whitelist and host/path char allowlist before persisting.
+  `/dns/doh/probe` runs a one-shot RFC8484 query (rate-limited via
+  the same per-client limiter as DoT). DoT and DoH are mutually
+  exclusive at the form layer with a backend assertion as
+  defence-in-depth. Apply order (dnscrypt-proxy first, then Unbound
+  reload) prevents a `~10s` retry storm on toggle-on.
 - **(backup) Automated snapshot scheduling**: a new `/backup` page
   drives encrypted config exports against multiple destinations on
   a cron schedule. Supported targets: local (`/var/lib/lankeeper/
