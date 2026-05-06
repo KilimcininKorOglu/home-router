@@ -6,6 +6,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-06
+
+First-class 6in4 tunneling for operators whose ISP refuses to
+deliver native IPv6. The /ipv6 dashboard now exposes a Plane
+selector that flips the entire IPv6 stack between DHCPv6-PD (the
+existing path, unchanged) and a Hurricane Electric 6in4 tunnel
+terminated locally on the router.
+
+### Added
+
+- **(ipv6) 6in4 tunneling end-to-end**: new SixInFourService owns
+  the sit interface lifecycle (`ip tunnel add mode sit ...` →
+  `link set up mtu` → `addr add ClientIPv6` → `-6 route add ::/0`)
+  with PPPoE-aware MTU (1452 over PPPoE, 1480 direct). State is
+  persisted to `/var/lib/lankeeper/state/ipv6-tunnel.json` for
+  observability. Restart is idempotent: any prior tunnel is torn
+  down before the new one is brought up.
+- **(ipv6) HE.net /nic/update DDNS client**: posts the new IPv4
+  endpoint with HTTP Basic Auth on every PPPoE reconnect (when
+  AutoUpdate is enabled). Identical-IPv4 calls dedupe to zero HTTP
+  hits to stay under HE's "abuse" rate limiter; only good/nochg
+  responses are cached. End-to-end coverage via httptest.
+- **(firewall) IPv6 tunnel ingress and forward**: the input chain
+  now accepts protocol-41 packets from `cfg.IPv6.Tunnel.ServerIPv4`
+  via the new `IPv6WANInterfaces` slice, and the forward chain
+  permits LAN ↔ tunnel device traffic. NAT66 is intentionally
+  disabled — IPv6 is end-to-end routed by design.
+- **(ipv6) RA renderer is mode-aware**: in 6in4 mode the RA
+  drop-in derives /64 sub-prefixes from `Tunnel.RoutedPrefix`
+  (typically /48) and advertises the tunnel MTU (1452/1480) so
+  clients clamp MSS for the encapsulated path. PD mode behaviour
+  is unchanged.
+- **(ipv6) Tunnel form, status card, and manual DDNS**: the /ipv6
+  page exposes the full HE.net tunnel definition (Server IPv4,
+  Client IPv6, Routed prefix, Tunnel ID, Username, Update Key) and
+  a live status card with device, MTU, local IPv4, last
+  /nic/update reply, and RX/TX byte counters. UpdateKey persists
+  through empty submits (the form shows a "leave blank to keep"
+  placeholder). New POST /ipv6/tunnel/update route triggers a
+  manual DDNS push without waiting for the next PPPoE reconnect.
+- **(config) IPv6TunnelConfig schema**: new struct fields
+  `Mode` ("dhcpv6-pd" / "6in4"), `Tunnel.{ServerIPv4, ClientIPv6,
+  RoutedPrefix, TunnelID, Username, UpdateKey, AutoUpdate, Device}`.
+  UpdateKey is stored plaintext like PPPoE.Password — the agent
+  socket is the trust boundary. Default device is `lkt6in4` to
+  avoid collisions with stock he-ipv6 systemd units.
+- **(test) Cross-service integration test for 6in4**: drives the
+  PPPoE on-connect callback by hand against real services and the
+  fakeAgent harness, asserting the full v0.4.0 contract — DDNS
+  POST → tunnel add chain → RA drop-in rewrite → dnsmasq reload —
+  plus dedup behaviour on identical-IPv4 reconnects.
+
+### Changed
+
+- **(ipv6) ApplyConfig now stops dhcp6c whenever Mode == "6in4"**:
+  the two planes are mutually exclusive at the daemon level, so
+  the IPv6 service tears down the PD client when the operator
+  switches to 6in4 (and vice versa via the handler's mode-swap
+  guard). RenderToDisk writes a distinct stub into `dhcp6c.conf`
+  so an operator inspecting the file sees that PD is intentionally
+  idle.
+- **(ipv6) PPPoE on-connect / on-disconnect hooks are mode-aware**:
+  in PD mode the existing dhcp6c restart/stop chain runs; in 6in4
+  mode the hook pushes the new IPv4 to HE.net (when AutoUpdate is
+  on), rebuilds the sit interface, and re-applies the RA drop-in.
+
 ## [0.3.1] - 2026-05-06
 
 Lifecycle hardening for the IPv6 lease watcher and the first
