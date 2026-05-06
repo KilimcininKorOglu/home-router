@@ -265,8 +265,12 @@ func (s *NTPService) RemoveAllowSubnet(index int) error {
 
 // SaveSettings updates scalar NTP fields. The fallback hostname goes
 // through the same chrony-grammar guard as AddSource so a `\nallow
-// 0.0.0.0/0` payload cannot ride the fallback path into chrony.conf.
-// (BUG-071)
+// 0.0.0.0/0` payload cannot ride the fallback path into chrony.conf
+// (BUG-071). The listen address must parse as a literal IPv4/IPv6
+// address — chrony's `bindaddress` directive is documented as
+// IP-only, and a hostname-shaped value would silently disable the
+// listener anyway. Stricter validation here also closes the
+// chrony.conf newline-injection vector. (BUG-072)
 func (s *NTPService) SaveSettings(fallback, listenAddress string, listenPort int, serverEnabled, rtcSync bool) error {
 	fallback = strings.TrimSpace(fallback)
 	if fallback != "" {
@@ -274,9 +278,15 @@ func (s *NTPService) SaveSettings(fallback, listenAddress string, listenPort int
 			return err
 		}
 	}
+	listenAddress = strings.TrimSpace(listenAddress)
+	if listenAddress != "" {
+		if err := netutil.ValidateIP(listenAddress); err != nil {
+			return fmt.Errorf("NTP listen address: %w", err)
+		}
+	}
 	s.cfg.NTP.Client.Fallback = fallback
 	s.cfg.NTP.Server.Enabled = serverEnabled
-	s.cfg.NTP.Server.ListenAddress = strings.TrimSpace(listenAddress)
+	s.cfg.NTP.Server.ListenAddress = listenAddress
 	s.cfg.NTP.Server.ListenPort = listenPort
 	s.cfg.NTP.RTCSync = rtcSync
 	return s.cfg.SaveToFile()

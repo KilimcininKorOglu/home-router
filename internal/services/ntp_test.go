@@ -71,6 +71,41 @@ func TestNTPSaveSettingsRejectsFallbackInjection(t *testing.T) {
 	}
 }
 
+// TestNTPSaveSettingsRejectsListenAddressInjection blocks chrony.conf
+// `bindaddress` injection via a newline-laced listen address. (BUG-072)
+func TestNTPSaveSettingsRejectsListenAddressInjection(t *testing.T) {
+	cases := []string{
+		"127.0.0.1\nallow 0.0.0.0/0",
+		"127.0.0.1 evil",
+		"not-an-ip",
+		"hostname.example.com", // chrony bindaddress is IP-only
+		"127.0.0.1\x00",
+	}
+	for _, addr := range cases {
+		t.Run(addr, func(t *testing.T) {
+			cfg := config.DefaultConfig()
+			cfg.SetFilePath(filepath.Join(t.TempDir(), "router.yaml"))
+			svc := services.NewNTPService(cfg)
+			if err := svc.SaveSettings("", addr, 0, true, false); err == nil {
+				t.Fatalf("expected listen address %q to be rejected", addr)
+			}
+		})
+	}
+}
+
+// TestNTPSaveSettingsAcceptsValidListenAddress covers the legitimate
+// IP literal shapes a router operator typically configures.
+func TestNTPSaveSettingsAcceptsValidListenAddress(t *testing.T) {
+	for _, addr := range []string{"", "127.0.0.1", "10.10.10.1", "::1", "fe80::1"} {
+		cfg := config.DefaultConfig()
+		cfg.SetFilePath(filepath.Join(t.TempDir(), "router.yaml"))
+		svc := services.NewNTPService(cfg)
+		if err := svc.SaveSettings("", addr, 0, true, false); err != nil {
+			t.Fatalf("expected accept for %q, got %v", addr, err)
+		}
+	}
+}
+
 // TestNTPSaveSettingsAcceptsEmptyFallback ensures clearing the
 // fallback (operator's "use default" choice) round-trips cleanly.
 func TestNTPSaveSettingsAcceptsEmptyFallback(t *testing.T) {
