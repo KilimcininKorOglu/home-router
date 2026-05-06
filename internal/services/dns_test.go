@@ -2,6 +2,8 @@ package services_test
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/KilimcininKorOglu/lankeeper/internal/config"
@@ -23,6 +25,59 @@ func TestQueryLogEmpty(t *testing.T) {
 	queries := svc.GetRecentQueries(10, 0)
 	if len(queries) != 0 {
 		t.Errorf("expected 0 queries, got %d", len(queries))
+	}
+}
+
+// TestSaveDNSSettingsRejectsBareIPDoTUpstream verifies that enabling
+// DoT with a bare-IP upstream — i.e. one without a `#hostname` SNI
+// suffix — is refused at the service boundary. Without SNI the TLS
+// stack performs only chain validation and any CA-signed cert can
+// MITM the resolver. (BUG-059)
+func TestSaveDNSSettingsRejectsBareIPDoTUpstream(t *testing.T) {
+	cases := []struct {
+		name     string
+		upstream string
+		wantErr  bool
+	}{
+		{"bare IP rejected", "1.1.1.1", true},
+		{"bare IP with port rejected", "1.1.1.1@853", true},
+		{"empty upstream rejected", "", true},
+		{"IP + SNI accepted", "1.1.1.1#cloudflare-dns.com", false},
+		{"IP + port + SNI accepted", "1.1.1.1@853#cloudflare-dns.com", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.DefaultConfig()
+			cfg.SetFilePath(filepath.Join(t.TempDir(), "router.yaml"))
+			svc := services.NewDNSService(cfg)
+			err := svc.SaveDNSSettings(true, tc.upstream)
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected error for upstream %q, got nil", tc.upstream)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("unexpected error for upstream %q: %v", tc.upstream, err)
+			}
+			// Non-empty bare-IP upstreams must surface the #hostname
+			// requirement explicitly so operators can fix the entry.
+			// Empty upstreams hit the earlier "empty or invalid"
+			// branch and are exempt from this assertion.
+			if tc.wantErr && err != nil && tc.upstream != "" &&
+				!strings.Contains(err.Error(), "#hostname") {
+				t.Errorf("error should mention #hostname requirement, got %q", err.Error())
+			}
+		})
+	}
+}
+
+// TestSaveDNSSettingsAllowsAnyUpstreamWhenDoTDisabled keeps the
+// validator scoped to the "enabled" path so operators can stash a
+// draft upstream while DoT is off. (BUG-059)
+func TestSaveDNSSettingsAllowsAnyUpstreamWhenDoTDisabled(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.SetFilePath(filepath.Join(t.TempDir(), "router.yaml"))
+	svc := services.NewDNSService(cfg)
+	if err := svc.SaveDNSSettings(false, "1.1.1.1"); err != nil {
+		t.Fatalf("disabled DoT should accept bare IP, got %v", err)
 	}
 }
 

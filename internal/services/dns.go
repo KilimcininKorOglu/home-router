@@ -343,9 +343,9 @@ func (s *DNSService) GetDNSConfig() config.DNSConfig {
 //   - "ip#hostname"                 (port 853 + SNI)
 // Probes are timeout-bounded (5s).
 func (s *DNSService) ProbeDoT(ctx context.Context, upstream string) (time.Duration, error) {
-	host, port, sni := parseDoTSpec(strings.TrimSpace(upstream))
-	if host == "" {
-		return 0, fmt.Errorf("empty or invalid upstream")
+	host, port, sni, err := parseAndValidateDoTSpec(strings.TrimSpace(upstream))
+	if err != nil {
+		return 0, err
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -353,7 +353,12 @@ func (s *DNSService) ProbeDoT(ctx context.Context, upstream string) (time.Durati
 	dialer := &tls.Dialer{
 		NetDialer: &net.Dialer{Timeout: 3 * time.Second},
 		Config: &tls.Config{
+			// SNI is mandatory (validateDoTUpstream rejects empty);
+			// crypto/tls verifies the cert chain AND VerifyHostname
+			// against this name, defeating MITM attempts that present
+			// a valid cert issued for some other domain.
 			ServerName: sni,
+			MinVersion: tls.VersionTLS12,
 		},
 	}
 	addr := net.JoinHostPort(host, port)
@@ -426,14 +431,41 @@ func parseDoTSpec(spec string) (host, port, sni string) {
 	return
 }
 
+// parseAndValidateDoTSpec wraps parseDoTSpec and rejects upstreams
+// that omit the `#hostname` SNI suffix. With SNI absent and the dial
+// address numeric, Go's TLS stack performs only chain validation —
+// a CA-signed certificate issued for any other name still passes the
+// handshake and silently exposes every DNS query to a path attacker.
+// We force the operator to declare the expected hostname so
+// crypto/tls runs VerifyHostname against it.
+func parseAndValidateDoTSpec(spec string) (host, port, sni string, err error) {
+	host, port, sni = parseDoTSpec(spec)
+	if host == "" {
+		return "", "", "", fmt.Errorf("empty or invalid upstream")
+	}
+	if sni == "" {
+		return "", "", "", fmt.Errorf("DoT upstream must include #hostname for certificate validation (e.g. %q#cloudflare-dns.com)", host)
+	}
+	return host, port, sni, nil
+}
+
 // SaveDNSSettings persists the DoT toggle and upstream string to
 // router.yaml. Caller is expected to follow up with ApplyConfig so
-// unbound reloads.
+// unbound reloads. When DoT is enabled the upstream MUST carry a
+// `#hostname` SNI suffix so unbound (and our probe) can verify the
+// server certificate against a name; otherwise the connection
+// silently degrades to chain-only validation and is MITM-able.
 func (s *DNSService) SaveDNSSettings(enableDoT bool, dotUpstream string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	dotUpstream = strings.TrimSpace(dotUpstream)
+	if enableDoT {
+		if _, _, _, err := parseAndValidateDoTSpec(dotUpstream); err != nil {
+			return err
+		}
+	}
 	s.cfg.DNS.EnableDoT = enableDoT
-	s.cfg.DNS.DoTUpstream = strings.TrimSpace(dotUpstream)
+	s.cfg.DNS.DoTUpstream = dotUpstream
 	return s.cfg.SaveToFile()
 }
 
