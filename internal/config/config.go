@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -383,14 +384,24 @@ type WGServerConfig struct {
 }
 
 type WGServerPeer struct {
-	Name          string   `yaml:"name"`
-	PublicKey     string   `yaml:"publicKey"`
-	PresharedKey  string   `yaml:"presharedKey"`
-	AllowedIPs    string   `yaml:"allowedIPs"`
-	Keepalive     int      `yaml:"keepalive"`
-	Endpoint      string   `yaml:"endpoint,omitempty"`
-	RemoteSubnets []string `yaml:"remoteSubnets,omitempty"`
-	IsSiteToSite  bool     `yaml:"isSiteToSite,omitempty"`
+	Name          string    `yaml:"name"`
+	PublicKey     string    `yaml:"publicKey"`
+	PresharedKey  string    `yaml:"presharedKey"`
+	AllowedIPs    string    `yaml:"allowedIPs"`
+	Keepalive     int       `yaml:"keepalive"`
+	Endpoint      string    `yaml:"endpoint,omitempty"`
+	RemoteSubnets []string  `yaml:"remoteSubnets,omitempty"`
+	IsSiteToSite  bool      `yaml:"isSiteToSite,omitempty"`
+	// Pending marks a site-to-site peer that has been issued a join
+	// token but not yet finalized (the remote side hasn't returned
+	// its public key via the ack token). Pending peers are skipped
+	// when rendering wgs0.conf so wg-quick doesn't reject the empty
+	// PublicKey, and they're garbage-collected after the invite
+	// expires.
+	Pending       bool      `yaml:"pending,omitempty"`
+	// InviteExpiresAt records when the join invite for this peer
+	// expires. Only meaningful when Pending is true.
+	InviteExpiresAt time.Time `yaml:"inviteExpiresAt,omitempty"`
 }
 
 type OpenVPNConfig struct {
