@@ -189,7 +189,11 @@ if [ -f /tmp/admin-password.txt ]; then
     if [ -z "$ADMIN_PASS" ]; then
         echo "UYARI / WARN: Yönetici şifresi boş, ayarlanmadı / Admin password empty, not set"
     else
-        ADMIN_HASH=$("$INSTALL_DIR/$BINARY_NAME" hash-password "$ADMIN_PASS" 2>/dev/null || echo "")
+        # Pipe password on stdin so it never appears in
+        # /proc/<pid>/cmdline. printf is a POSIX shell builtin, so
+        # the plaintext value is never argv-exposed by an external
+        # command either.
+        ADMIN_HASH=$(printf '%s' "$ADMIN_PASS" | "$INSTALL_DIR/$BINARY_NAME" hash-password 2>/dev/null || echo "")
         if [ -z "$ADMIN_HASH" ]; then
             echo "HATA / ERROR: Şifre hash'lenemedi / Failed to hash admin password"
         elif [ ! -f "$CONFIG_DIR/router.yaml" ]; then

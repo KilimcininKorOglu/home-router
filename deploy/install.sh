@@ -237,8 +237,12 @@ ask_admin_password() {
         break
     done
 
+    # Pipe password on stdin so it never appears in /proc/<pid>/cmdline
+    # or `ps` output. printf is a shell builtin in bash/dash, so the
+    # plaintext value is never argv-exposed by an external command
+    # either.
     local hash
-    hash=$("$INSTALL_DIR/$BINARY_NAME" hash-password "$password" 2>/dev/null) || hash=""
+    hash=$(printf '%s' "$password" | "$INSTALL_DIR/$BINARY_NAME" hash-password 2>/dev/null) || hash=""
 
     if [[ -n "$hash" ]]; then
         sed -i "s|adminPasswordHash:.*|adminPasswordHash: \"$hash\"|" "$CONFIG_DIR/router.yaml"
