@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/KilimcininKorOglu/lankeeper/internal/config"
 	"github.com/KilimcininKorOglu/lankeeper/internal/netutil"
@@ -13,6 +14,13 @@ import (
 type QoSService struct {
 	cfg *config.Config
 	mu  sync.RWMutex
+
+	// Per-client bandwidth sampler state. All maps are nil until
+	// the first RebuildClientCounters / SamplePerClient call.
+	lastCounters map[string]counterPair
+	lastSample   time.Time
+	clientLeases map[string]Lease
+	history      map[string][]ClientUsage
 }
 
 func NewQoSService(cfg *config.Config) *QoSService {
