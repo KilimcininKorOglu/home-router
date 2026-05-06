@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -123,8 +124,37 @@ func (s *SyslogService) SaveServerConfig(cfg config.SyslogServerConfig) error {
 	if err := validateLogPath(cfg.LogPath); err != nil {
 		return err
 	}
+	if err := validateRsyslogPort("listen_udp", cfg.ListenUDP); err != nil {
+		return err
+	}
+	if err := validateRsyslogPort("listen_tcp", cfg.ListenTCP); err != nil {
+		return err
+	}
 	s.cfg.Syslog.Server = cfg
 	return s.cfg.SaveToFile()
+}
+
+// validateRsyslogPort enforces that a port destined for rsyslog.conf
+// is a plain decimal integer in the legal port range. rsyslog
+// renders the value inside a RainerScript double-quoted string
+// literal (`port="{{ .Server.ListenUDP }}"`), so any character that
+// could close that quote — `"`, `\n`, `(`, space, etc. — would
+// allow an authenticated operator to inject sibling directives such
+// as `module(load="omprog" binary="/bin/sh")`. Parsing through
+// strconv.Atoi guarantees the persisted value contains digits only,
+// which is safe to interpolate. Empty UDP value is allowed because
+// the template gates `imudp` on `Server.Enabled` only when the
+// operator wants UDP; we still require a parseable port if a
+// non-empty value is supplied. (BUG-076)
+func validateRsyslogPort(field, raw string) error {
+	if raw == "" {
+		return nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return fmt.Errorf("syslog %s must be a decimal port number, got %q", field, raw)
+	}
+	return netutil.ValidatePort(n)
 }
 
 // validateLogPath restricts the dynaFile root in rsyslog.conf to

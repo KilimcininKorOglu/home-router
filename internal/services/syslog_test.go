@@ -80,6 +80,52 @@ func TestSyslogSaveServerEmptyPathsAccepted(t *testing.T) {
 	}
 }
 
+// TestSyslogSaveServerRejectsPortInjection covers BUG-076: the
+// listen_udp / listen_tcp fields render inside double-quoted
+// RainerScript port literals. Anything but a decimal port lets the
+// operator close the quote and inject directives like
+// `module(load="omprog" binary="/bin/sh")`.
+func TestSyslogSaveServerRejectsPortInjection(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  config.SyslogServerConfig
+	}{
+		{"udp omprog", config.SyslogServerConfig{ListenUDP: `514" binary="/bin/sh`}},
+		{"udp newline", config.SyslogServerConfig{ListenUDP: "514\n)module(load=\"omprog\")"}},
+		{"udp not numeric", config.SyslogServerConfig{ListenUDP: "abc"}},
+		{"udp zero", config.SyslogServerConfig{ListenUDP: "0"}},
+		{"udp out of range", config.SyslogServerConfig{ListenUDP: "70000"}},
+		{"udp negative", config.SyslogServerConfig{ListenUDP: "-1"}},
+		{"udp leading space", config.SyslogServerConfig{ListenUDP: " 514"}},
+		{"tcp omprog", config.SyslogServerConfig{ListenTCP: `514" binary="/bin/sh`}},
+		{"tcp not numeric", config.SyslogServerConfig{ListenTCP: "xyz"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.DefaultConfig()
+			cfg.SetFilePath(filepath.Join(t.TempDir(), "router.yaml"))
+			svc := services.NewSyslogService(cfg)
+			if err := svc.SaveServerConfig(tc.cfg); err == nil {
+				t.Fatalf("expected error for %+v, got nil", tc.cfg)
+			}
+		})
+	}
+}
+
+// TestSyslogSaveServerAcceptsValidPorts ensures common operator
+// inputs round-trip cleanly: empty (template skips), 514, 6514.
+func TestSyslogSaveServerAcceptsValidPorts(t *testing.T) {
+	for _, p := range []string{"", "514", "6514", "65535", "1"} {
+		cfg := config.DefaultConfig()
+		cfg.SetFilePath(filepath.Join(t.TempDir(), "router.yaml"))
+		svc := services.NewSyslogService(cfg)
+		err := svc.SaveServerConfig(config.SyslogServerConfig{ListenUDP: p, ListenTCP: p})
+		if err != nil {
+			t.Fatalf("expected accept for port %q, got %v", p, err)
+		}
+	}
+}
+
 // TestSyslogSaveServerRejectsRainerScriptInjection covers BUG-069:
 // values like `/etc/ssl/cert.pem"\n)module(load="omprog")` would
 // otherwise close the RainerScript double-quoted string and inject
