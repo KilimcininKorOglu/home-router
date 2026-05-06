@@ -13,11 +13,14 @@ interface {{ .WANInterface }} {
     script "{{ .ScriptPath }}";
 };
 
-# Identity Association for Prefix Delegation. The prefix length below
-# is a hint; the ISP may delegate something shorter or longer.
+# Identity Association for Prefix Delegation. Each prefix-interface
+# block carves a /{{ printf "%d" 64 }} (or 64-sla-len) sub-prefix out of the
+# delegated block and assigns it to a downstream interface.
 id-assoc pd 0 {
-    prefix-interface {{ .LANInterface }} {
-        sla-id 0;
-        sla-len {{ .SLALen }};
+{{- range .PrefixInterfaces }}
+    prefix-interface {{ .Device }} {
+        sla-id {{ .SLAID }};
+        sla-len {{ $.SLALen }};
     };
+{{- end }}
 };

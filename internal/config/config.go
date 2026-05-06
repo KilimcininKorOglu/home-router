@@ -306,6 +306,11 @@ type IPv6LANConfig struct {
 	ULA        IPv6ULAConfig `yaml:"ula"`
 	RAInterval int           `yaml:"raInterval"`
 	RDNSS      bool          `yaml:"rdnss"`
+	// SubnetMap maps VLAN ID (or the literal "lan" for the primary
+	// LAN bridge) to a sla-id offset within the delegated prefix.
+	// Empty -> auto-assign lan=0, then increasing sla-id per VLAN
+	// in the order they appear in cfg.VLANs.
+	SubnetMap map[string]int `yaml:"subnetMap,omitempty"`
 }
 
 type IPv6ULAConfig struct {

@@ -18,10 +18,12 @@ const testDhcp6cConfTmpl = `interface {{ .WANInterface }} {
     script "{{ .ScriptPath }}";
 };
 id-assoc pd 0 {
-    prefix-interface {{ .LANInterface }} {
-        sla-id 0;
-        sla-len {{ .SLALen }};
+{{- range .PrefixInterfaces }}
+    prefix-interface {{ .Device }} {
+        sla-id {{ .SLAID }};
+        sla-len {{ $.SLALen }};
     };
+{{- end }}
 };
 `
 
@@ -170,6 +172,79 @@ func TestPrefixStateCIDR(t *testing.T) {
 	empty := services.PrefixState{}
 	if got := empty.CIDR(); got != "" {
 		t.Errorf("empty CIDR() = %q, want empty string", got)
+	}
+}
+
+func TestIPv6RenderConfigVLANsGetSubPrefixes(t *testing.T) {
+	cfg := newIPv6TestConfig(t)
+	cfg.VLANs = []config.VLANConfig{
+		{ID: "guest", Parent: "lan", VID: 13, Role: "guest"},
+		{ID: "iot", Parent: "lan", VID: 20, Role: "iot"},
+	}
+	svc := newIPv6TestService(t, cfg)
+
+	out, err := svc.RenderConfig()
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	// Expected: lan -> sla-id 0, guest (eth1.13) -> 1, iot (eth1.20) -> 2.
+	for _, want := range []string{
+		"prefix-interface eth1 ",
+		"prefix-interface eth1.13 ",
+		"prefix-interface eth1.20 ",
+		"sla-id 0",
+		"sla-id 1",
+		"sla-id 2",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in rendered config, got:\n%s", want, out)
+		}
+	}
+}
+
+func TestIPv6RenderConfigSubnetMapOverride(t *testing.T) {
+	cfg := newIPv6TestConfig(t)
+	cfg.VLANs = []config.VLANConfig{
+		{ID: "guest", Parent: "lan", VID: 13, Role: "guest"},
+	}
+	cfg.IPv6.LAN.SubnetMap = map[string]int{
+		"lan":   2,
+		"guest": 7,
+	}
+	svc := newIPv6TestService(t, cfg)
+
+	out, err := svc.RenderConfig()
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	// Both overrides must be honoured verbatim.
+	if !strings.Contains(out, "sla-id 2") {
+		t.Errorf("expected sla-id 2 (lan override), got:\n%s", out)
+	}
+	if !strings.Contains(out, "sla-id 7") {
+		t.Errorf("expected sla-id 7 (guest override), got:\n%s", out)
+	}
+}
+
+func TestIPv6RenderConfigSlash64NoVLANs(t *testing.T) {
+	// /64 delegation -> sla-len 0 -> no room for VLAN sub-prefixes.
+	// Render must still emit the primary LAN block but skip VLANs.
+	cfg := newIPv6TestConfig(t)
+	cfg.IPv6.WAN.PrefixHint = "/64"
+	cfg.VLANs = []config.VLANConfig{
+		{ID: "guest", Parent: "lan", VID: 13, Role: "guest"},
+	}
+	svc := newIPv6TestService(t, cfg)
+
+	out, err := svc.RenderConfig()
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(out, "prefix-interface eth1 ") {
+		t.Errorf("expected primary LAN entry, got:\n%s", out)
+	}
+	if strings.Contains(out, "eth1.13") {
+		t.Errorf("VLAN entry must be skipped on /64 delegation, got:\n%s", out)
 	}
 }
 

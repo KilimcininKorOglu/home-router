@@ -83,7 +83,6 @@ func NewIPv6ServiceFromFS(cfg *config.Config, confTmpl, scriptTmpl string) *IPv6
 
 type dhcp6cTemplateData struct {
 	WANInterface string
-	LANInterface string
 	RapidCommit  bool
 	// ScriptPath is the absolute path to the lease-event hook script
 	// that dhcp6c invokes on every state change.
@@ -92,6 +91,14 @@ type dhcp6cTemplateData struct {
 	// `delegated_length + SLALen <= 64` for SLAAC compatibility.
 	// For a /56 delegation we want /64 sub-prefixes -> SLALen = 8.
 	SLALen int
+	// PrefixInterfaces is one entry per downstream interface (LAN
+	// bridge + each VLAN) that receives a sub-prefix.
+	PrefixInterfaces []prefixInterface
+}
+
+type prefixInterface struct {
+	Device string
+	SLAID  int
 }
 
 type dhcp6cScriptTemplateData struct {
@@ -120,11 +127,11 @@ func (s *IPv6Service) RenderConfig() (string, error) {
 	}
 
 	data := dhcp6cTemplateData{
-		WANInterface: wan,
-		LANInterface: lan,
-		RapidCommit:  s.cfg.IPv6.WAN.RapidCommit,
-		ScriptPath:   dhcp6cScriptPath,
-		SLALen:       slaLen,
+		WANInterface:     wan,
+		RapidCommit:      s.cfg.IPv6.WAN.RapidCommit,
+		ScriptPath:       dhcp6cScriptPath,
+		SLALen:           slaLen,
+		PrefixInterfaces: s.buildPrefixInterfaces(lan, slaLen),
 	}
 
 	tmpl, err := s.parseConfTemplate()
@@ -304,6 +311,64 @@ func (p PrefixState) PrefixAge() time.Duration {
 		return 0
 	}
 	return time.Since(time.Unix(p.Timestamp, 0))
+}
+
+// buildPrefixInterfaces returns one entry per downstream interface
+// (LAN bridge + each VLAN) that should receive a sub-prefix. SLA-IDs
+// are taken from cfg.IPv6.LAN.SubnetMap when present, otherwise
+// auto-assigned in declaration order starting at 0 for the LAN.
+//
+// When slaLen == 0 the ISP delegated a /64 — no room to subdivide, so
+// only the primary LAN gets a prefix-interface entry.
+func (s *IPv6Service) buildPrefixInterfaces(lanDev string, slaLen int) []prefixInterface {
+	subnetMap := s.cfg.IPv6.LAN.SubnetMap
+
+	// Helper: pick from override map, fall back to caller-supplied default.
+	pick := func(key string, dflt int) int {
+		if v, ok := subnetMap[key]; ok {
+			return v
+		}
+		return dflt
+	}
+
+	out := []prefixInterface{
+		{Device: lanDev, SLAID: pick("lan", 0)},
+	}
+
+	if slaLen == 0 {
+		// /64 delegation has zero subnet bits — VLANs cannot get
+		// distinct sub-prefixes from this delegation.
+		return out
+	}
+
+	maxSLA := 1<<slaLen - 1
+	auto := 1
+	for _, vlan := range s.cfg.VLANs {
+		if vlan.ID == "" {
+			continue
+		}
+		var parentDev string
+		for _, iface := range s.cfg.Interfaces {
+			if iface.ID == vlan.Parent {
+				parentDev = iface.Device
+				break
+			}
+		}
+		if parentDev == "" || vlan.VID == 0 {
+			continue
+		}
+		dev := fmt.Sprintf("%s.%d", parentDev, vlan.VID)
+		sla := pick(vlan.ID, auto)
+		if sla > maxSLA {
+			// Skip silently; operator will see fewer interfaces in
+			// the rendered config than expected. The Web UI surface
+			// can flag this in a follow-up commit.
+			continue
+		}
+		out = append(out, prefixInterface{Device: dev, SLAID: sla})
+		auto++
+	}
+	return out
 }
 
 // resolveInterfaces returns the WAN and LAN device names from the
