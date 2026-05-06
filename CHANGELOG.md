@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-06
+
+Lifecycle hardening for the IPv6 lease watcher and the first
+cross-service integration test in the repo.
+
+### Fixed
+
+- **(ipv6) StopLeaseWatcher now cancels the pending 150ms debounce
+  timer**: previously the timer was a local var inside
+  runLeaseWatcher, so a `time.AfterFunc` callback could still fire
+  after Stop returned. The stale dispatch then ran against
+  torn-down state (cleared agent client, replaced config) and
+  produced spurious "permission denied" log lines plus a data race
+  surfaced by the new integration test. Timer is now a struct
+  field stopped under mu.Lock before close(stopCh).
+
+### Changed
+
+- **(test) Cross-service integration test for the lease-driven
+  firewall apply chain**: `ipv6_firewall_integration_test.go`
+  wires real `IPv6Service` + real `FirewallService` together the
+  same way `web/server.go` does in production. A fake agent
+  records every `exec.run` / `file.write` / `file.read` call so
+  the production code path runs unchanged. Asserts the dnsmasq RA
+  drop-in is rewritten, dnsmasq is reload-or-restarted, and the
+  firewall Apply chain runs (snapshot/validate/apply nft, with
+  `-c` only on validate). Same harness will cover 6in4 lease
+  watching in v0.4.0.
+
 ## [0.3.0] - 2026-05-06
 
 IPv6 reaches feature parity. wide-dhcpv6 already delegates an ISP
