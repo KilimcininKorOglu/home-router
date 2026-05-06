@@ -279,6 +279,13 @@ type DNSConfig struct {
 	Upstream                []string          `yaml:"upstream"`
 	DoTUpstream             string            `yaml:"dotUpstream"`
 	EnableDoT               bool              `yaml:"enableDoT"`
+	// EnableDoH and DoTUpstream are mutually exclusive at the form
+	// layer; the validator rejects both-true. When set, Unbound is
+	// forwarded to the dnscrypt-proxy stub on 127.0.0.1:5353 which
+	// in turn speaks DoH/HTTPS to the configured upstream. Spec is
+	// either an `https://host/dns-query` URL or a `sdns://` stamp.
+	EnableDoH               bool              `yaml:"enableDoH,omitempty"`
+	DoHUpstream             string            `yaml:"dohUpstream,omitempty"`
 	BlocklistURLs           []string          `yaml:"blocklistUrls"`
 	BlocklistUpdateSchedule string            `yaml:"blocklistUpdateSchedule"`
 	CacheSize               int               `yaml:"cacheSize"`
