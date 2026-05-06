@@ -79,6 +79,7 @@ type unboundTemplateData struct {
 	QueryLogPath    string
 	EnableDoT       bool
 	DoTUpstream     string
+	EnableDoH       bool
 	StaticRecords   []renderStaticRecord
 }
 
@@ -110,6 +111,7 @@ func (s *DNSService) RenderConfig() (string, error) {
 		QueryLogPath:    s.cfg.DNS.QueryLog.LogPath,
 		EnableDoT:       s.cfg.DNS.EnableDoT,
 		DoTUpstream:     s.cfg.DNS.DoTUpstream,
+		EnableDoH:       s.cfg.DNS.EnableDoH && !s.cfg.DNS.EnableDoT,
 		ULAPrefix:       s.cfg.IPv6.LAN.ULA.Prefix,
 		StaticRecords:   buildRenderStaticRecords(s.cfg.DNS.StaticRecords),
 	}

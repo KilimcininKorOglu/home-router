@@ -70,4 +70,9 @@ forward-zone:
     name: "."
     forward-tls-upstream: yes
     forward-addr: {{ .DoTUpstream }}
+{{- else if .EnableDoH }}
+forward-zone:
+    name: "."
+    forward-tls-upstream: no
+    forward-addr: 127.0.0.1@5353
 {{- end }}
