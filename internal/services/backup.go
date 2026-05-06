@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/scrypt"
@@ -22,10 +23,20 @@ import (
 
 type BackupService struct {
 	configDir string
+	runMu     sync.Mutex
+	runner    func(context.Context) error
 }
 
 func NewBackupService(configDir string) *BackupService {
 	return &BackupService{configDir: configDir}
+}
+
+// SetRunner installs the orchestration callback used by RunNow and
+// the cron scheduler. Wired by server.go after the targets / cfg
+// reference is available, so the service itself stays free of any
+// config dependency.
+func (s *BackupService) SetRunner(fn func(context.Context) error) {
+	s.runner = fn
 }
 
 func (s *BackupService) Export(ctx context.Context, outputPath, passphrase string) error {

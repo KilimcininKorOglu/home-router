@@ -31,6 +31,62 @@ type Config struct {
 	Syslog      SyslogConfig      `yaml:"syslog"`
 	NTP         NTPConfig         `yaml:"ntp"`
 	Storage     StorageConfig     `yaml:"storage"`
+	Backup      BackupConfig      `yaml:"backup"`
+}
+
+// BackupConfig holds the scheduling, target list, retention policy
+// and run history for the automated backup feature. Targets are
+// processed sequentially on each scheduled run; partial failures
+// are recorded in History but do not abort the remaining targets.
+type BackupConfig struct {
+	Enabled    bool             `yaml:"enabled"`
+	Schedule   string           `yaml:"schedule"`             // "@daily", "0 3 * * *"
+	Passphrase string           `yaml:"passphrase,omitempty"` // AES-256 encrypted
+	Retention  int              `yaml:"retention"`            // keep N most recent
+	Targets    []BackupTarget   `yaml:"targets,omitempty"`
+	LastRun    time.Time        `yaml:"lastRun,omitempty"`
+	LastStatus string           `yaml:"lastStatus,omitempty"`
+	LastError  string           `yaml:"lastError,omitempty"`
+	History    []BackupHistory  `yaml:"history,omitempty"`
+}
+
+// BackupTarget describes a single destination. Type drives which
+// fields are read; unrelated fields are zero-valued. Secret fields
+// (SecretAccessKey, Password) are AES-encrypted before SaveToFile
+// and decrypted on Load via the same path used for PPPoE.Password.
+type BackupTarget struct {
+	Type string `yaml:"type"` // "local", "s3", "sftp"
+	Name string `yaml:"name"`
+
+	// Local
+	Path string `yaml:"path,omitempty"`
+
+	// S3-compatible
+	Endpoint        string `yaml:"endpoint,omitempty"`
+	Region          string `yaml:"region,omitempty"`
+	Bucket          string `yaml:"bucket,omitempty"`
+	Prefix          string `yaml:"prefix,omitempty"`
+	AccessKeyID     string `yaml:"accessKeyId,omitempty"`
+	SecretAccessKey string `yaml:"secretAccessKey,omitempty"`
+	UsePathStyle    bool   `yaml:"usePathStyle,omitempty"`
+
+	// SFTP
+	Host      string `yaml:"host,omitempty"`
+	Port      int    `yaml:"port,omitempty"`
+	User      string `yaml:"user,omitempty"`
+	Password  string `yaml:"password,omitempty"`
+	KeyPath   string `yaml:"keyPath,omitempty"`
+	RemoteDir string `yaml:"remoteDir,omitempty"`
+}
+
+// BackupHistory is one row of the run-history ring buffer.
+type BackupHistory struct {
+	StartedAt   time.Time `yaml:"startedAt"`
+	CompletedAt time.Time `yaml:"completedAt"`
+	Bytes       int64     `yaml:"bytes"`
+	Targets     []string  `yaml:"targets,omitempty"`
+	Status      string    `yaml:"status"` // "ok" | "partial" | "error"
+	Message     string    `yaml:"message,omitempty"`
 }
 
 type SystemConfig struct {
