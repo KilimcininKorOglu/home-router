@@ -110,6 +110,18 @@
                 </select>
             </div>
             <div class="input-group" style="margin-bottom:var(--space-md);">
+                <label class="input-label">{{ t $.Lang "ipv6.plane" }}</label>
+                <select class="input" name="mode">
+                    <option value="dhcpv6-pd" {{ if eq .Mode "dhcpv6-pd" }}selected{{ end }}>{{ t $.Lang "ipv6.modePD" }}</option>
+                    <option value="6in4" {{ if eq .Mode "6in4" }}selected{{ end }}>{{ t $.Lang "ipv6.modeTunnel" }}</option>
+                </select>
+                <div style="color:var(--text-tertiary); font-size:var(--font-xs); margin-top:var(--space-xs);">
+                    {{ t $.Lang "ipv6.planeHelp" }}
+                </div>
+            </div>
+            {{ if eq .Mode "dhcpv6-pd" }}
+            <!-- DHCPv6-PD specific form fields -->
+            <div class="input-group" style="margin-bottom:var(--space-md);">
                 <label style="display:flex; align-items:center; gap:var(--space-sm);">
                     <input type="checkbox" name="requestPrefix" {{ if .WAN.RequestPrefix }}checked{{ end }}>
                     {{ t $.Lang "ipv6.requestPrefix" }}
@@ -141,9 +153,111 @@
                     {{ t $.Lang "ipv6.rapidCommitHelp" }}
                 </div>
             </div>
+            {{ end }}
+
+            {{ if eq .Mode "6in4" }}
+            <!-- 6in4 (HE.net) tunnel form fields -->
+            <div style="border-top:1px solid var(--border-color); padding-top:var(--space-md); margin-top:var(--space-sm);">
+                <h3 style="font-size:var(--font-md); margin-bottom:var(--space-sm);">{{ t $.Lang "ipv6.tunnelSection" }}</h3>
+                <div style="color:var(--text-tertiary); font-size:var(--font-xs); margin-bottom:var(--space-md);">
+                    {{ t $.Lang "ipv6.tunnelHelp" }}
+                </div>
+                <div class="input-group" style="margin-bottom:var(--space-md);">
+                    <label class="input-label">{{ t $.Lang "ipv6.tunnelServerIPv4" }}</label>
+                    <input class="input" type="text" name="tunnelServerIPv4" value="{{ .Tunnel.ServerIPv4 }}" placeholder="216.66.80.30">
+                </div>
+                <div class="input-group" style="margin-bottom:var(--space-md);">
+                    <label class="input-label">{{ t $.Lang "ipv6.tunnelClientIPv6" }}</label>
+                    <input class="input" type="text" name="tunnelClientIPv6" value="{{ .Tunnel.ClientIPv6 }}" placeholder="2001:470:1f0a:abc::2">
+                </div>
+                <div class="input-group" style="margin-bottom:var(--space-md);">
+                    <label class="input-label">{{ t $.Lang "ipv6.tunnelRoutedPrefix" }}</label>
+                    <input class="input" type="text" name="tunnelRoutedPrefix" value="{{ .Tunnel.RoutedPrefix }}" placeholder="2001:470:abcd::/48">
+                    <div style="color:var(--text-tertiary); font-size:var(--font-xs); margin-top:var(--space-xs);">
+                        {{ t $.Lang "ipv6.tunnelRoutedPrefixHelp" }}
+                    </div>
+                </div>
+                <div class="input-group" style="margin-bottom:var(--space-md);">
+                    <label class="input-label">{{ t $.Lang "ipv6.tunnelID" }}</label>
+                    <input class="input" type="text" name="tunnelID" value="{{ .Tunnel.TunnelID }}">
+                </div>
+                <div class="input-group" style="margin-bottom:var(--space-md);">
+                    <label class="input-label">{{ t $.Lang "ipv6.tunnelUsername" }}</label>
+                    <input class="input" type="text" name="tunnelUsername" value="{{ .Tunnel.Username }}">
+                </div>
+                <div class="input-group" style="margin-bottom:var(--space-md);">
+                    <label class="input-label">{{ t $.Lang "ipv6.tunnelUpdateKey" }}</label>
+                    <input class="input" type="password" name="tunnelUpdateKey" placeholder="{{ if .Tunnel.UpdateKey }}{{ t $.Lang "ipv6.tunnelUpdateKeyKept" }}{{ end }}">
+                    <div style="color:var(--text-tertiary); font-size:var(--font-xs); margin-top:var(--space-xs);">
+                        {{ t $.Lang "ipv6.tunnelUpdateKeyHelp" }}
+                    </div>
+                </div>
+                <div class="input-group" style="margin-bottom:var(--space-md);">
+                    <label style="display:flex; align-items:center; gap:var(--space-sm);">
+                        <input type="checkbox" name="tunnelAutoUpdate" {{ if .Tunnel.AutoUpdate }}checked{{ end }}>
+                        {{ t $.Lang "ipv6.tunnelAutoUpdate" }}
+                    </label>
+                    <div style="color:var(--text-tertiary); font-size:var(--font-xs); margin-top:var(--space-xs);">
+                        {{ t $.Lang "ipv6.tunnelAutoUpdateHelp" }}
+                    </div>
+                </div>
+                <div class="input-group" style="margin-bottom:var(--space-md);">
+                    <label class="input-label">{{ t $.Lang "ipv6.tunnelDevice" }}</label>
+                    <input class="input" type="text" name="tunnelDevice" value="{{ .Tunnel.Device }}" placeholder="lkt6in4">
+                </div>
+            </div>
+            {{ end }}
+
             <button type="submit" class="btn btn-primary btn-sm">{{ t $.Lang "common.save" }}</button>
         </form>
     </div>
+
+    {{ if and (eq .Mode "6in4") .TunnelStatus }}
+    <!-- 6in4 status card -->
+    <div class="card" style="margin-bottom:var(--space-lg);">
+        <div class="card-header">
+            <span class="card-title">{{ t $.Lang "ipv6.tunnelStatus" }}</span>
+            {{ if .TunnelActive }}
+                <span class="badge badge-success">{{ t $.Lang "ipv6.active" }}</span>
+            {{ else }}
+                <span class="badge badge-error">{{ t $.Lang "ipv6.inactive" }}</span>
+            {{ end }}
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-md); padding:var(--space-md) 0;">
+            <div>
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.tunnelDevice" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-md); margin-top:var(--space-xs);">{{ .TunnelStatus.Device }}</div>
+            </div>
+            <div>
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.tunnelMTU" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-md); margin-top:var(--space-xs);">{{ if .TunnelStatus.MTU }}{{ .TunnelStatus.MTU }}{{ else }}—{{ end }}</div>
+            </div>
+            <div>
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.tunnelLocalIPv4" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-md); margin-top:var(--space-xs);">{{ if .TunnelStatus.LocalIPv4 }}{{ .TunnelStatus.LocalIPv4 }}{{ else }}—{{ end }}</div>
+            </div>
+            <div>
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.tunnelRoutedPrefix" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-md); margin-top:var(--space-xs);">{{ if .TunnelStatus.RoutedPrefix }}{{ .TunnelStatus.RoutedPrefix }}{{ else }}—{{ end }}</div>
+            </div>
+            {{ if .TunnelStatus.LastDDNS }}
+            <div style="grid-column:1/-1;">
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.tunnelLastUpdate" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-sm); margin-top:var(--space-xs);">{{ .TunnelStatus.LastDDNS }}</div>
+            </div>
+            {{ end }}
+            <div style="grid-column:1/-1;">
+                <div style="color:var(--text-secondary); font-size:var(--font-xs);">{{ t $.Lang "ipv6.tunnelTraffic" }}</div>
+                <div style="font-family:monospace; font-size:var(--font-sm); margin-top:var(--space-xs);">RX {{ .TunnelStatus.RxBytes }} / TX {{ .TunnelStatus.TxBytes }}</div>
+            </div>
+        </div>
+        <div style="display:flex; gap:var(--space-sm); padding-top:var(--space-md); border-top:1px solid var(--border-color);">
+            <button class="btn btn-primary btn-sm" hx-post="/ipv6/tunnel/update" hx-swap="none">
+                {{ t $.Lang "ipv6.tunnelUpdateNow" }}
+            </button>
+        </div>
+    </div>
+    {{ end }}
 
     <!-- Announced sub-prefix table -->
     {{ if .Announced }}

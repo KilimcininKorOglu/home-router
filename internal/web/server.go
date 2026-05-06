@@ -107,10 +107,33 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 	ntpHandler := handlers.NewNTPHandler(renderer, ntpSvc)
 
 	ipv6Svc := services.NewIPv6Service(cfg)
-	// Wire PPPoE -> IPv6 cross-service callbacks so the dhcp6c client
-	// is restarted on every (re)connect and torn down on disconnect.
-	pppoeSvc.SetOnConnect(func(ctx context.Context) error { return ipv6Svc.Restart(ctx) })
-	pppoeSvc.SetOnDisconnect(func(ctx context.Context) error { return ipv6Svc.Stop(ctx) })
+	sixInFourSvc := services.NewSixInFourService(cfg)
+	// Wire PPPoE -> IPv6 cross-service callbacks. The behaviour is
+	// mode-aware: PD restarts dhcp6c, 6in4 pushes the new IPv4 to
+	// HE.net (when AutoUpdate is on) and rebuilds the sit interface.
+	pppoeSvc.SetOnConnect(func(ctx context.Context) error {
+		if cfg.IPv6.Mode == "6in4" {
+			st, _ := pppoeSvc.Status(ctx)
+			if st != nil && st.LocalIP != "" && cfg.IPv6.Tunnel.AutoUpdate {
+				if _, err := sixInFourSvc.UpdateRemoteIPv4(ctx, st.LocalIP); err != nil {
+					log.Printf("6in4: nic/update on connect: %v", err)
+				}
+			}
+			if err := sixInFourSvc.Restart(ctx); err != nil {
+				return fmt.Errorf("6in4 restart on connect: %w", err)
+			}
+			// Refresh the dnsmasq RA drop-in so RoutedPrefix-derived
+			// /64 sub-prefixes follow the rebuilt tunnel.
+			return ipv6Svc.ApplyConfig(ctx)
+		}
+		return ipv6Svc.Restart(ctx)
+	})
+	pppoeSvc.SetOnDisconnect(func(ctx context.Context) error {
+		if cfg.IPv6.Mode == "6in4" {
+			return sixInFourSvc.Stop(ctx)
+		}
+		return ipv6Svc.Stop(ctx)
+	})
 	// Whenever the dhcp6c lease changes (new prefix, RELEASE, EXIT) we
 	// re-apply the firewall ruleset so any ip6-derived rules are
 	// rebuilt from the freshly delegated prefix. The 30s watchdog is
@@ -129,7 +152,7 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 		// is lost.
 		log.Printf("ipv6: start lease watcher: %v", err)
 	}
-	ipv6Handler := handlers.NewIPv6Handler(renderer, cfg, ipv6Svc)
+	ipv6Handler := handlers.NewIPv6Handler(renderer, cfg, ipv6Svc, sixInFourSvc, pppoeSvc)
 
 	backupSvc := services.NewBackupService("/etc/lankeeper")
 	monitorSvc := services.NewMonitorService()
@@ -324,6 +347,7 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 	mux.Handle("POST /ipv6/release", authed(http.HandlerFunc(s.ipv6.HandleRelease)))
 	mux.Handle("POST /ipv6/start", authed(http.HandlerFunc(s.ipv6.HandleStart)))
 	mux.Handle("POST /ipv6/stop", authed(http.HandlerFunc(s.ipv6.HandleStop)))
+	mux.Handle("POST /ipv6/tunnel/update", authed(http.HandlerFunc(s.ipv6.HandleTunnelUpdateNow)))
 	mux.Handle("GET /qos", authed(http.HandlerFunc(s.qos.HandlePage)))
 	mux.Handle("POST /qos/apply", authed(http.HandlerFunc(s.qos.HandleApply)))
 	mux.Handle("POST /qos/clear", authed(http.HandlerFunc(s.qos.HandleClear)))

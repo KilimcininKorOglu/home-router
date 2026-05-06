@@ -14,13 +14,23 @@ import (
 )
 
 type IPv6Handler struct {
-	renderer *tmpl.Renderer
-	cfg      *config.Config
-	ipv6     *services.IPv6Service
+	renderer  *tmpl.Renderer
+	cfg       *config.Config
+	ipv6      *services.IPv6Service
+	sixinfour *services.SixInFourService
+	pppoe     *services.PPPoEService
 }
 
-func NewIPv6Handler(renderer *tmpl.Renderer, cfg *config.Config, ipv6 *services.IPv6Service) *IPv6Handler {
-	return &IPv6Handler{renderer: renderer, cfg: cfg, ipv6: ipv6}
+// NewIPv6Handler wires the IPv6 dashboard. sixinfour and pppoe may be
+// nil during tests that don't exercise the 6in4 flow; the handler
+// nil-checks before reading them.
+func NewIPv6Handler(renderer *tmpl.Renderer, cfg *config.Config,
+	ipv6 *services.IPv6Service, sixinfour *services.SixInFourService,
+	pppoe *services.PPPoEService) *IPv6Handler {
+	return &IPv6Handler{
+		renderer: renderer, cfg: cfg, ipv6: ipv6,
+		sixinfour: sixinfour, pppoe: pppoe,
+	}
 }
 
 // HandlePage renders the IPv6 dashboard with current PD status, the
@@ -53,27 +63,39 @@ func (h *IPv6Handler) HandlePage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	pageData := map[string]any{
+		"State":        state,
+		"Active":       state.Active(),
+		"Expired":      state.Expired(),
+		"ExpiresIn":    expiresInText,
+		"CIDR":         state.CIDR(),
+		"AgeMin":       int(state.PrefixAge().Minutes()),
+		"WAN":          h.cfg.IPv6.WAN,
+		"LAN":          h.cfg.IPv6.LAN,
+		"Tunnel":       h.cfg.IPv6.Tunnel,
+		"Enabled":      h.cfg.IPv6.Enabled,
+		"Mode":         h.cfg.IPv6.Mode,
+		"PPPoEUsed":    h.cfg.PPPoE.Username != "",
+		"Announced":    announced,
+		"ULAPrefix":    h.cfg.IPv6.LAN.ULA.Prefix,
+		"ULAEnabled":   h.cfg.IPv6.LAN.ULA.Enabled,
+		"RDNSSAddrs":   strings.Fields(state.RDNSS),
+		"SearchDomain": h.cfg.System.Domain,
+	}
+
+	// In 6in4 mode pull live tunnel state — RX/TX, last DDNS reply,
+	// configured prefix — so the status card shows the tunnel plane
+	// instead of the (empty) PD lease state.
+	if h.cfg.IPv6.Mode == "6in4" && h.sixinfour != nil {
+		ts, _ := h.sixinfour.Status(r.Context())
+		pageData["TunnelStatus"] = ts
+		pageData["TunnelActive"] = ts.Active
+	}
+
 	data := &tmpl.PageData{
 		Lang: lang,
 		Page: "ipv6",
-		Data: map[string]any{
-			"State":         state,
-			"Active":        state.Active(),
-			"Expired":       state.Expired(),
-			"ExpiresIn":     expiresInText,
-			"CIDR":          state.CIDR(),
-			"AgeMin":        int(state.PrefixAge().Minutes()),
-			"WAN":           h.cfg.IPv6.WAN,
-			"LAN":           h.cfg.IPv6.LAN,
-			"Enabled":       h.cfg.IPv6.Enabled,
-			"Mode":          h.cfg.IPv6.Mode,
-			"PPPoEUsed":     h.cfg.PPPoE.Username != "",
-			"Announced":     announced,
-			"ULAPrefix":     h.cfg.IPv6.LAN.ULA.Prefix,
-			"ULAEnabled":    h.cfg.IPv6.LAN.ULA.Enabled,
-			"RDNSSAddrs":    strings.Fields(state.RDNSS),
-			"SearchDomain":  h.cfg.System.Domain,
-		},
+		Data: pageData,
 	}
 
 	if err := h.renderer.Render(w, "ipv6", "base", data); err != nil {
@@ -82,8 +104,8 @@ func (h *IPv6Handler) HandlePage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleSave persists the IPv6 WAN settings (request prefix, hint,
-// rapid-commit) and re-applies the dhcp6c config.
+// HandleSave persists the IPv6 settings — including a mode swap
+// between PD and 6in4 — and re-applies the relevant plane.
 func (h *IPv6Handler) HandleSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
@@ -94,21 +116,45 @@ func (h *IPv6Handler) HandleSave(w http.ResponseWriter, r *http.Request) {
 	rapidCommit := r.FormValue("rapidCommit") == "on"
 	hint := strings.TrimSpace(r.FormValue("prefixHint"))
 	enabled := r.FormValue("enabled")
+	mode := strings.TrimSpace(r.FormValue("mode"))
 
 	switch enabled {
 	case "auto", "on", "off":
 	default:
 		enabled = "auto"
 	}
+	switch mode {
+	case "dhcpv6-pd", "6in4":
+	default:
+		mode = "dhcpv6-pd"
+	}
 
 	if hint != "" && !strings.HasPrefix(hint, "/") {
 		hint = "/" + hint
 	}
 
+	previousMode := h.cfg.IPv6.Mode
 	h.cfg.IPv6.Enabled = enabled
+	h.cfg.IPv6.Mode = mode
 	h.cfg.IPv6.WAN.RequestPrefix = requestPrefix
 	h.cfg.IPv6.WAN.RapidCommit = rapidCommit
 	h.cfg.IPv6.WAN.PrefixHint = hint
+
+	// 6in4 fields — only consumed when Mode == "6in4" but stored
+	// regardless so the operator's draft survives a mode toggle.
+	h.cfg.IPv6.Tunnel.ServerIPv4 = strings.TrimSpace(r.FormValue("tunnelServerIPv4"))
+	h.cfg.IPv6.Tunnel.ClientIPv6 = strings.TrimSpace(r.FormValue("tunnelClientIPv6"))
+	h.cfg.IPv6.Tunnel.RoutedPrefix = strings.TrimSpace(r.FormValue("tunnelRoutedPrefix"))
+	h.cfg.IPv6.Tunnel.TunnelID = strings.TrimSpace(r.FormValue("tunnelID"))
+	h.cfg.IPv6.Tunnel.Username = strings.TrimSpace(r.FormValue("tunnelUsername"))
+	if v := r.FormValue("tunnelUpdateKey"); v != "" {
+		// Empty submit = preserve existing key (form shows placeholder).
+		h.cfg.IPv6.Tunnel.UpdateKey = v
+	}
+	h.cfg.IPv6.Tunnel.AutoUpdate = r.FormValue("tunnelAutoUpdate") == "on"
+	if dev := strings.TrimSpace(r.FormValue("tunnelDevice")); dev != "" {
+		h.cfg.IPv6.Tunnel.Device = dev
+	}
 
 	if err := h.cfg.SaveToFile(); err != nil {
 		log.Printf("ipv6 save config: %v", err)
@@ -116,12 +162,27 @@ func (h *IPv6Handler) HandleSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Mode crossover: if the operator switched away from 6in4, tear
+	// the tunnel down before re-applying the new plane.
+	if previousMode == "6in4" && mode != "6in4" && h.sixinfour != nil {
+		if err := h.sixinfour.Stop(r.Context()); err != nil {
+			log.Printf("ipv6 mode swap: tunnel stop: %v", err)
+		}
+	}
+
 	if err := h.ipv6.ApplyConfig(r.Context()); err != nil {
 		log.Printf("ipv6 apply: %v", err)
-		// Config was saved; surface the apply error but do not roll back
-		// the YAML — operator can retry from the UI without re-entering.
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Bring the new plane up.
+	if mode == "6in4" && h.sixinfour != nil {
+		if err := h.sixinfour.Restart(r.Context()); err != nil {
+			log.Printf("6in4 restart on save: %v", err)
+			// Don't 500 — the YAML is saved and the operator can
+			// inspect the failure on the status card.
+		}
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
@@ -130,6 +191,35 @@ func (h *IPv6Handler) HandleSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/ipv6", http.StatusSeeOther)
+}
+
+// HandleTunnelUpdateNow asks HE.net to re-register our current IPv4
+// endpoint. Used when the operator wants to recover from a stale
+// remote IPv4 without waiting for the next PPPoE reconnect.
+func (h *IPv6Handler) HandleTunnelUpdateNow(w http.ResponseWriter, r *http.Request) {
+	if h.sixinfour == nil {
+		http.Error(w, "6in4 not configured", http.StatusBadRequest)
+		return
+	}
+
+	currentIPv4 := ""
+	if h.pppoe != nil {
+		st, _ := h.pppoe.Status(r.Context())
+		if st != nil {
+			currentIPv4 = st.LocalIP
+		}
+	}
+	if currentIPv4 == "" {
+		http.Error(w, "no current WAN IPv4", http.StatusServiceUnavailable)
+		return
+	}
+
+	if _, err := h.sixinfour.UpdateRemoteIPv4(r.Context(), currentIPv4); err != nil {
+		log.Printf("6in4 manual update: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.respondOK(w, r)
 }
 
 // HandleRenew triggers an immediate dhcp6c renew (re-solicit the ISP
