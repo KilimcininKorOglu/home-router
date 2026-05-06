@@ -29,6 +29,9 @@ type Server struct {
 	dhcp      *handlers.DHCPHandler
 	dashboard *handlers.DashboardHandler
 	settings  *handlers.SystemHandler
+	backuph   *handlers.BackupHandler
+	backupSvc *services.BackupService
+	backupOrch *services.BackupOrchestrator
 	qos       *handlers.QoSHandler
 	vpn       *handlers.VPNHandler
 	ovpn      *handlers.OpenVPNHandler
@@ -168,9 +171,11 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 	ipv6Handler := handlers.NewIPv6Handler(renderer, cfg, ipv6Svc, sixInFourSvc, pppoeSvc)
 
 	backupSvc := services.NewBackupService("/etc/lankeeper")
+	backupOrch := services.NewBackupOrchestrator(backupSvc, cfg)
 	monitorSvc := services.NewMonitorService()
 	dashboardHandler := handlers.NewDashboardHandler(renderer, monitorSvc, pppoeSvc, dhcpSvc)
 	settingsHandler := handlers.NewSystemHandler(renderer, cfg, loc, dhcpSvc, backupSvc, updateSvc)
+	backupHandler := handlers.NewBackupHandler(renderer, cfg, loc, backupSvc)
 	sseBroker := NewSSEBroker()
 	qosBroker := NewSSEBroker()
 
@@ -186,6 +191,9 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 		dhcpSvc:   dhcpSvc,
 		dashboard: dashboardHandler,
 		settings:  settingsHandler,
+		backuph:   backupHandler,
+		backupSvc: backupSvc,
+		backupOrch: backupOrch,
 		qos:       qosHandler,
 		vpn:       vpnHandler,
 		ovpn:      ovpnHandler,
@@ -276,6 +284,10 @@ func (s *Server) Serve(ctx context.Context) error {
 	// not leave stale pending peers visible in the UI.
 	s.vpnSvc.StartInviteGC(ctx, 5*time.Minute)
 
+	// Backup scheduler: ticks every 30s, fires runOnce when the
+	// configured cron schedule next matches. No-op when disabled.
+	s.backupSvc.StartScheduler(ctx, s.backupOrch.SnapshotProvider())
+
 	go func() {
 		<-ctx.Done()
 		close(stopMonitor)
@@ -345,6 +357,12 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 	mux.Handle("POST /system/factory-reset", authed(http.HandlerFunc(s.settings.HandleFactoryReset)))
 	mux.Handle("GET /system/backup/export", authed(http.HandlerFunc(s.settings.HandleExport)))
 	mux.Handle("POST /system/backup/import", authed(http.HandlerFunc(s.settings.HandleImport)))
+	mux.Handle("GET /backup", authed(http.HandlerFunc(s.backuph.HandleBackupPage)))
+	mux.Handle("POST /backup/schedule", authed(http.HandlerFunc(s.backuph.HandleSaveSchedule)))
+	mux.Handle("POST /backup/target", authed(http.HandlerFunc(s.backuph.HandleAddTarget)))
+	mux.Handle("DELETE /backup/target/{name}", authed(http.HandlerFunc(s.backuph.HandleDeleteTarget)))
+	mux.Handle("POST /backup/run", authed(http.HandlerFunc(s.backuph.HandleRunNow)))
+	mux.Handle("GET /backup/history", authed(http.HandlerFunc(s.backuph.HandleHistory)))
 	mux.Handle("GET /system/update/check", authed(http.HandlerFunc(s.settings.HandleCheckUpdate)))
 	mux.Handle("POST /system/update/apply", authed(http.HandlerFunc(s.settings.HandleApplyUpdate)))
 	mux.Handle("POST /system/update/confirm", authed(http.HandlerFunc(s.settings.HandleConfirmUpdate)))
