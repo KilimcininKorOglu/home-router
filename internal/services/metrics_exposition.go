@@ -178,8 +178,8 @@ func clientLabels(c ClientBandwidthMetric) map[string]string {
 // metric family. We never emit them more than once per family in
 // the same output - Prometheus parsers tolerate it but flag it.
 func writeHelp(w io.Writer, name, help string, kind metricKind) {
-	fmt.Fprintf(w, "# HELP %s %s\n", name, help)
-	fmt.Fprintf(w, "# TYPE %s %s\n", name, kind)
+	_, _ = fmt.Fprintf(w, "# HELP %s %s\n", name, help)
+	_, _ = fmt.Fprintf(w, "# TYPE %s %s\n", name, kind)
 }
 
 // writeMetric emits a single sample line. Float values are
@@ -187,7 +187,7 @@ func writeHelp(w io.Writer, name, help string, kind metricKind) {
 // 10.000000) and floats stay precise enough for percentages.
 func writeMetric(w io.Writer, name string, labels map[string]string, value float64) {
 	if len(labels) == 0 {
-		fmt.Fprintf(w, "%s %g\n", name, value)
+		_, _ = fmt.Fprintf(w, "%s %g\n", name, value)
 		return
 	}
 	keys := make([]string, 0, len(labels))
@@ -208,7 +208,7 @@ func writeMetric(w io.Writer, name string, labels map[string]string, value float
 		b.WriteByte('"')
 	}
 	b.WriteByte('}')
-	fmt.Fprintf(w, "%s %g\n", b.String(), value)
+	_, _ = fmt.Fprintf(w, "%s %g\n", b.String(), value)
 }
 
 // escapeLabelValue escapes per the Prometheus exposition spec:

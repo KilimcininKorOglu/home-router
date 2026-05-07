@@ -23,7 +23,7 @@ func TestMetricsHandlerContentTypeAndBody(t *testing.T) {
 	h.HandleMetrics(rec, req)
 
 	res := rec.Result()
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if got := res.StatusCode; got != http.StatusOK {
 		t.Fatalf("status = %d, want 200", got)

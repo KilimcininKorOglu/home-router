@@ -44,6 +44,7 @@ type Server struct {
 	pppoe     *handlers.PPPoEHandler
 	ipv6      *handlers.IPv6Handler
 	health    *handlers.HealthCheckHandler
+	metricsh  *handlers.MetricsHandler
 	sse       *SSEBroker
 	// qosSse is dedicated to per-client bandwidth events. Kept
 	// separate from sse so consumers of /events/stats are not
@@ -194,6 +195,14 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 	dashboardHandler := handlers.NewDashboardHandler(renderer, monitorSvc, pppoeSvc, dhcpSvc)
 	settingsHandler := handlers.NewSystemHandler(renderer, cfg, loc, dhcpSvc, backupSvc, updateSvc)
 	backupHandler := handlers.NewBackupHandler(renderer, cfg, loc, backupSvc)
+	// MetricsService composes runtime state from every domain
+	// service into a single Prometheus-shaped snapshot. We wire
+	// every contributor we have - the snapshot itself is nil-safe
+	// and degrades when any one is missing.
+	metricsSvc := services.NewMetricsService(
+		cfg, monitorSvc, dnsSvc, dhcpSvc, qosSvc, vpnSvc, backupSvc, updateSvc,
+	)
+	metricsHandler := handlers.NewMetricsHandler(metricsSvc)
 	sseBroker := NewSSEBroker()
 	qosBroker := NewSSEBroker()
 
@@ -221,6 +230,7 @@ func NewServer(cfg *config.Config, loc *i18n.I18n, webFS fs.FS, updateSvc *servi
 		pppoe:     pppoeHandler,
 		ipv6:      ipv6Handler,
 		health:    healthHandler,
+		metricsh:  metricsHandler,
 		storageh:  storageHandler,
 		syslogh:   syslogHandler,
 		ntph:      ntpHandler,
@@ -386,6 +396,12 @@ func (s *Server) routes(mux *http.ServeMux, webFS fs.FS) {
 	mux.Handle("POST /system/update/confirm", authed(http.HandlerFunc(s.settings.HandleConfirmUpdate)))
 	mux.Handle("POST /system/update/rollback", authed(http.HandlerFunc(s.settings.HandleRollbackUpdate)))
 	mux.Handle("GET /api/version", http.HandlerFunc(s.settings.HandleVersion))
+	// /metrics is intentionally NOT behind authed: Prometheus
+	// scrapers don't carry session cookies. The global LANOnly
+	// middleware (with LAN + loopback subnets) already gates
+	// remote access, so the only callers that can reach this
+	// route are on the trusted LAN side.
+	mux.Handle("GET /metrics", http.HandlerFunc(s.metricsh.HandleMetrics))
 	mux.Handle("GET /network", authed(http.HandlerFunc(s.network.HandlePage)))
 	mux.Handle("POST /network/pppoe/connect", authed(http.HandlerFunc(s.pppoe.HandleConnect)))
 	mux.Handle("POST /network/pppoe/disconnect", authed(http.HandlerFunc(s.pppoe.HandleDisconnect)))

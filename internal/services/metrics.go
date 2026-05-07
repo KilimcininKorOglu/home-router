@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
-	"fmt"
 	"strings"
 
 	"github.com/KilimcininKorOglu/lankeeper/internal/config"
@@ -263,9 +262,4 @@ func macHash(mac string) string {
 	return hex.EncodeToString(h[:4])
 }
 
-// metricsLogf is a tiny indirection so future debug logging from
-// the metrics path doesn't sprinkle log.Printf everywhere. Today
-// it's a no-op; tests can wire a buffer if needed.
-func metricsLogf(format string, args ...any) {
-	_ = fmt.Sprintf(format, args...)
-}
+
