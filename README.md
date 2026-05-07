@@ -24,6 +24,7 @@ ISP modems (particularly Turkish ISPs like Turkcell Superonline) lack SQM/QoS su
 | VLANs          | Create/delete with isolation, per-VLAN DHCP                              |
 | NTP            | chrony server with bind address, port, allow-subnet management           |
 | Syslog         | rsyslog server (UDP/TCP/TLS RFC 5425) and forwarding client              |
+| Monitoring     | Prometheus `/metrics` endpoint (LAN-only, exposition format 0.0.4)        |
 | Backup         | Encrypted (AES-256-GCM) configuration export/import                      |
 | Updates        | Over-the-air via GitHub Releases, atomic swap, 60s watchdog rollback     |
 | Monitoring     | Real-time CPU/RAM/bandwidth via SSE, Canvas charts                       |
@@ -165,6 +166,45 @@ No frontend build tools, no npm, no ORM, no database driver. The web frontend us
 Dark-mode dominant design inspired by X (Twitter). All visible strings localized in Turkish and English with cookie-based language selection.
 
 Pages: Dashboard, Network, Firewall, VPN (WireGuard), OpenVPN, Routing, DNS, DHCP, QoS, NAS, Storage, NTP, Syslog, Settings, Login.
+
+## Monitoring
+
+LANKeeper exposes a Prometheus-compatible scrape endpoint at `GET /metrics` with the standard text exposition format (`text/plain; version=0.0.4`). The endpoint is LAN-only by virtue of the same middleware that gates the admin UI: callers from outside the configured LAN subnets receive `403 Forbidden`. No authentication is required because Prometheus scrapers do not carry session cookies; the trust boundary is the network perimeter.
+
+Metric families exposed (all prefixed `lankeeper_`):
+
+| Family                                  | Type    | Labels         |
+|-----------------------------------------|---------|----------------|
+| `build_info`                            | gauge   | version,commit |
+| `uptime_seconds`                        | gauge   | -              |
+| `cpu_percent`                           | gauge   | -              |
+| `memory_total_bytes` / `memory_used_bytes` | gauge   | -              |
+| `temperature_celsius`                   | gauge   | -              |
+| `interface_rx_bytes_total` / `_tx_`     | counter | device         |
+| `dhcp_active_leases`                    | gauge   | -              |
+| `dns_queries_total` / `cache_hits_total` / `cache_misses_total` / `blocked_total` | counter | - |
+| `client_rx_bytes_total` / `_tx_` / `_rx_bps` / `_tx_bps` | counter+gauge | mac,hostname |
+| `wireguard_peer_online` / `_handshake_age_seconds` / `_rx_bytes_total` / `_tx_` | gauge+counter | peer |
+| `s2s_peer_online` / `_handshake_age_seconds` | gauge | peer |
+| `openvpn_active_sessions`               | gauge   | -              |
+| `backup_last_run_timestamp` / `_last_status_ok` / `_history_total` | gauge | - |
+| `pppoe_connected` / `ipv6_active` / `firewall_active` | gauge | - |
+| `ipv6_mode_info`                        | gauge   | mode           |
+
+Per-client labels (`mac`, `hostname`) are capped at 64 entries per scrape and the MAC value is a stable 8-char SHA1 prefix to bound cardinality on busy networks. Hostnames are escaped per the Prometheus spec.
+
+Sample Prometheus scrape config:
+
+```yaml
+scrape_configs:
+  - job_name: lankeeper
+    scheme: https
+    metrics_path: /metrics
+    tls_config:
+      insecure_skip_verify: true   # router uses self-signed ECDSA P-256
+    static_configs:
+      - targets: ['10.10.10.1:8443']
+```
 
 ## Configuration
 

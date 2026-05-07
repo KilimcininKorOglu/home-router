@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **(monitoring) Prometheus `/metrics` endpoint**: LAN-only,
+  exposition format 0.0.4, no auth (scrapers carry no session
+  cookies; the LAN-only middleware is the trust boundary). About
+  30 metric families covering build info, uptime, CPU/RAM/temp,
+  per-interface byte counters, DHCP lease count, DNS query/hit/
+  miss/blocked totals, per-client bandwidth (capped 64 rows,
+  SHA1[:4] MAC label for stable cardinality), WireGuard road-
+  warrior peers, S2S peers, OpenVPN session count, backup last-
+  run/status/history, PPPoE/IPv6/firewall liveness gauges, and
+  an IPv6 `mode_info` label-style metric. Stdlib-only writer
+  (~50 LOC `fmt.Fprintf`) - no `client_golang` dependency.
 - **(dns) DNS-over-HTTPS upstream**: a new `/dns` encryption-mode
   card lets the operator pick Plain (recursive) / DoT / DoH for
   upstream resolution. DoH support routes through a

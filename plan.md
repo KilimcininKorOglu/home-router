@@ -2607,13 +2607,20 @@ v0.1.0 (2026-05-06) ile yukarıdaki 11 faz tamamlandı. Aşağıdaki başlıklar
 
 ### Sonraki adaylar (önceliksiz)
 
-- Metrik export endpoint (Prometheus formatı `/metrics`, sadece LAN-only).
 - DoH SERVER (Unbound 1.20+ ile clientler 443'te LANKeeper'a DoH
   yapsın). TLS sertifika yönetimi mevcut `EnsureTLSCert` ile
   uyumlu; ayrı feature olarak takip.
+- Grafana dashboard JSON paketi (mevcut `/metrics` üzerinde,
+  sample scrape config README'de hazır).
 
 ### Tamamlananlar
 
+- Prometheus `/metrics` endpoint — LAN-only (mevcut LANOnly
+  middleware), no auth, exposition format 0.0.4. Stdlib-only
+  writer (~50 LOC `fmt.Fprintf`), client_golang dep yok. ~30
+  metric family: build/uptime/CPU/RAM/temp/iface bytes/DHCP/DNS/
+  per-client bandwidth (64 cap, SHA1[:4] MAC hash) /WG peers/S2S/
+  OpenVPN/backup/PPPoE/IPv6/firewall.
 - DNS-over-HTTPS upstream — `/dns` sayfasında "DNS Şifreleme Modu"
   kartı: Plain / DoT / DoH radyosuyla seçim. Unbound DoH upstream'i
   HİÇBİR sürümde desteklemediği için (NLnetLabs/unbound#525 hâlâ
